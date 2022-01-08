@@ -1,0 +1,69 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "eatcookiesbot"
+version = "0.1.0"
+description = ""
+authors = ["Alexey Vasilenko <avenior@ya.ru>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+aiogram = "^2.18"
+ujson = "^5.1.0"
+aiohttp = {extras = ["speedups"], version = "^3.8.1"}
+loguru = "^0.5.3"
+python-dotenv = "^0.19.2"
+SQLAlchemy = "^1.4.29"
+psycopg2 = "^2.9.3"
+
+[tool.poetry.dev-dependencies]
+nitpick = "^0.27"
+pre-commit = "^2.6.0"
+pre-commit-hooks = "^3.2.0"
+wemake-python-styleguide = "^0.14"
+ipdb = "^0.13.8"
+ipython = "^7.23.1"
+
+# Code Formatters
+autoflake = "^1.3.1"
+autopep8 = "^1.5.4"
+docformatter = "^1.3.1"
+isort = "^4.3.21" # TODO (isort): not ^5.5.4 due to wemake-python-styleguide
+language-formatters-pre-commit-hooks = "^1.5.0"
+
+# (Static) Code Analyzers
+darglint = "^1.5"
+flake8 = "^3.8.3"
+flake8-bandit = "^2.1"
+flake8-broken-line = "^0.2.0"
+flake8-bugbear = "^19.8"
+flake8-comprehensions = "^3.2.0" # Better list/set/dict comprehensions.
+flake8-debugger = "^3.2.0"
+flake8-docstrings = "^1.5"
+flake8-eradicate = ">=0.3,<0.5" # Find commented out (or so called "dead") code.
+flake8-fixme = "^1.1.0" # Check for FIXME, TODO and other temporary developer notes.
+flake8-isort = "^3.0"
+flake8-logging-format = "^0.6.0"
+flake8-pytest-style = "^1.3"
+flake8-quotes = "^2.0"
+flake8-rst-docstrings = "^0.0.12"
+flake8-string-format = "^0.2"
+flake8_commas = "^2.0"
+mypy = "^0.782"
+pycodestyle = "^2.6"
+pydocstyle = "^5.1"
+
+# Editor integration
+python-lsp-server = "^1.1.0"
+pyls-isort = "^0.2.2"
+pyls-flake8 = "^0.4.0"
+mypy-ls = "^0.4.1"
+
+# Test Suite
+pytest = "^6.0.1"
+pytest-asyncio = "^0.14.0"
+pytest-cov = "^2.10.0"
+hypothesis = "^6.1.1"
+oitnb = "^0.2.2"
