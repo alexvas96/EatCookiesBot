@@ -1,8 +1,6 @@
-import os
-
 from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
 from aiogram.types.message import ContentTypes
+from db import Place, session_scope
 from settings import API_TOKEN
 
 
@@ -11,23 +9,19 @@ dp = Dispatcher(bot)
 
 
 @dp.message_handler(commands=['start', 'help'])
-async def send_welcome(msg: types.Message):
+async def send_welcome(msg: types.Message) -> None:
     await msg.answer(f'Я бот. Приятно познакомиться, {msg.from_user.id}')
 
 
 @dp.message_handler(content_types=ContentTypes.TEXT)
-async def get_text_messages(msg: types.Message):
+async def get_text_messages(msg: types.Message) -> None:
     if msg.text.lower() == 'привет':
         await msg.answer('Привет!')
     else:
         await msg.answer('Не понимаю, что это значит.')
 
 
-
-from db import session_scope, Place
-
-def main():
-
+def main() -> None:
     with session_scope() as s:
         questions = s.query(Place).order_by(Place.id.desc()).all()
         print(questions)

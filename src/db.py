@@ -1,21 +1,21 @@
-
 from contextlib import contextmanager
-from sqlalchemy import create_engine
 
-from sqlalchemy.orm import sessionmaker
-from settings import DB_HOST, DB_NAME, DB_USER, DB_PASSWORD
-
-engine = create_engine(
-        f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}',
-        echo=True,
-    )
+from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
+from sqlalchemy import Column, ForeignKey, Integer, String, create_engine, orm
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+
+ENGINE = create_engine(
+    f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}',
+    echo=True,
+)
 
 Base = declarative_base()
 
 DBSession = sessionmaker(
     binds={
-        Base: engine,
+        Base: ENGINE,
     },
     expire_on_commit=False,
 )
@@ -34,8 +34,6 @@ def session_scope():
     finally:
         session.close()
 
-from sqlalchemy import Column, Integer, ForeignKey, Text, orm, String
-
 
 class PlaceType(Base):
     __tablename__ = 'place_types'
@@ -51,4 +49,4 @@ class Place(Base):
     name = Column(String(500))
     url = Column(String)
     place_type_id = Column(Integer, ForeignKey('place_types.id'), nullable=False)
-    place_type = orm.relationship(PlaceType)  # innerjoin=True для использования JOIN вместо LEFT JOIN
+    place_type = orm.relationship(PlaceType)

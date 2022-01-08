@@ -1,0 +1,104 @@
+exclude: ^$|venv|messages
+fail_fast: false
+repos:
+- repo: local
+  hooks:
+  - id: nitpick
+    name: Nitpick
+    description: Enforce the same configuration (flake8, isort, mypy etc.) across multiple Python projects
+    entry: flake8 --select=NIP -j 0
+    language: python
+    types: [python]
+    always_run: true
+
+  - id: check-merge-conflict
+    name: Check for merge conflicts
+    description: Check for files that contain merge conflict strings.
+    entry: check-merge-conflict
+    language: python
+    stages: [commit, push]
+
+  - id: autoflake
+    name: autoflake
+    description: Removes unused imports and unused variables as reported by pyflakes
+    entry: autoflake
+    args: [--in-place, --remove-all-unused-imports]
+    language: python
+    types: [python]
+  - id: isort
+    name: isort
+    description: isort your imports, so you don't have to
+    entry: isort
+    args: [--recursive, --apply]
+    language: python
+    types: [python]
+  - id: docformatter
+    name: docformatter
+    description: Formats docstrings to follow PEP 257.
+    entry: docformatter
+    args: [--in-place, --wrap-summaries, '100', --wrap-descriptions, '100']
+    language: python
+    types: [python]
+  - id: autopep8
+    name: autopep8
+    description: automatically formats Python code to conform to the PEP 8 style guide.
+    entry: autopep8
+    args: [--in-place]
+    language: python
+    types: [python]
+  - id: flake8
+    name: flake8
+    description: '`flake8` is a command-line utility for enforcing style consistency across Python projects.'
+    entry: flake8
+    language: python
+    types: [python]
+    require_serial: true
+  - id: mypy
+    name: Running mypy
+    description: static type checker for Python 3
+    entry: mypy
+    language: python
+    types: [python]
+
+  - id: check-toml
+    name: Check Toml
+    description: Toml file syntax errors
+    entry: check-toml
+    language: python
+    types: [toml]
+  - id: pretty-format-toml
+    name: Pretty format TOML
+    description: Set a standard for formatting TOML files.
+    entry: pretty-format-toml
+    args: [--autofix]
+    language: python
+    types: [toml]
+    exclude: ^pyproject.toml$
+
+  - id: check-yaml
+    name: Check YAML
+    description: YAML file syntax errors
+    entry: check-yaml
+    language: python
+    types: [yaml]
+  - id: pretty-format-yaml
+    name: Pretty format YAML
+    description: Set a standard for formatting YAML files.
+    entry: pretty-format-yaml
+    args: [--autofix, --indent, '2']
+    language: python
+    types: [yaml]
+
+  - id: check-json
+    name: Check JSON
+    description: Check JSON files for parseable syntax.
+    entry: check-json
+    language: python
+    types: [json]
+  - id: pretty-format-json
+    name: Pretty format JSON
+    description: Set a standard for formatting JSON files.
+    entry: pretty-format-json
+    args: [--autofix, --indent, '2', --no-ensure-ascii, --no-sort-keys]
+    language: python
+    types: [json]
