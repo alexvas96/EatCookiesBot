@@ -1,4 +1,4 @@
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
 from db import Place, session_scope
 from settings import API_TOKEN
@@ -15,17 +15,24 @@ async def send_welcome(msg: types.Message) -> None:
 
 @dp.message_handler(content_types=ContentTypes.TEXT)
 async def get_text_messages(msg: types.Message) -> None:
-    if msg.text.lower() == 'привет':
+    msg_lower = msg.text.lower()
+
+    if msg_lower == 'привет':
         await msg.answer('Привет!')
+
+    elif 'обед' in msg_lower:
+        await msg.answer('Смотри, что я нашел:')
+
+        with session_scope() as s:
+            places = s.query(Place).all()
+            for p in places:
+                await msg.answer(p.name)
     else:
         await msg.answer('Не понимаю, что это значит.')
 
 
 def main() -> None:
-    with session_scope() as s:
-        questions = s.query(Place).order_by(Place.id.desc()).all()
-        print(questions)
-    # executor.start_polling(dp)
+    executor.start_polling(dp)
 
 
 if __name__ == '__main__':
