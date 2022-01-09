@@ -25,6 +25,7 @@ repos:
     args: [--in-place, --remove-all-unused-imports]
     language: python
     types: [python]
+
   - id: isort
     name: isort
     description: isort your imports, so you don't have to
@@ -32,6 +33,7 @@ repos:
     args: [--recursive, --apply]
     language: python
     types: [python]
+
   - id: docformatter
     name: docformatter
     description: Formats docstrings to follow PEP 257.
@@ -39,6 +41,13 @@ repos:
     args: [--in-place, --wrap-summaries, '100', --wrap-descriptions, '100']
     language: python
     types: [python]
+
+  - id: end-of-file-fixer
+    name: end-of-file-fixer
+    entry: end-of-file-fixer
+    language: python
+    types: [python]
+
   - id: autopep8
     name: autopep8
     description: automatically formats Python code to conform to the PEP 8 style guide.
@@ -46,6 +55,7 @@ repos:
     args: [--in-place]
     language: python
     types: [python]
+
   - id: flake8
     name: flake8
     description: '`flake8` is a command-line utility for enforcing style consistency across Python projects.'
@@ -53,6 +63,7 @@ repos:
     language: python
     types: [python]
     require_serial: true
+
   - id: mypy
     name: Running mypy
     description: static type checker for Python 3
@@ -66,6 +77,7 @@ repos:
     entry: check-toml
     language: python
     types: [toml]
+
   - id: pretty-format-toml
     name: Pretty format TOML
     description: Set a standard for formatting TOML files.
@@ -81,6 +93,7 @@ repos:
     entry: check-yaml
     language: python
     types: [yaml]
+
   - id: pretty-format-yaml
     name: Pretty format YAML
     description: Set a standard for formatting YAML files.
@@ -95,6 +108,7 @@ repos:
     entry: check-json
     language: python
     types: [json]
+
   - id: pretty-format-json
     name: Pretty format JSON
     description: Set a standard for formatting JSON files.

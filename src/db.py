@@ -2,7 +2,6 @@ from contextlib import contextmanager
 
 from sqlalchemy import Column, ForeignKey, Integer, String, create_engine, orm
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 
 from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
 
@@ -14,7 +13,7 @@ ENGINE = create_engine(
 
 Base = declarative_base()
 
-DBSession = sessionmaker(
+DBSession = orm.sessionmaker(
     binds={
         Base: ENGINE,
     },
