@@ -1,5 +1,6 @@
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
+
 from db import Place, session_scope
 from settings import API_TOKEN
 

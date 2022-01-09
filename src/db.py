@@ -1,9 +1,10 @@
 from contextlib import contextmanager
 
-from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
 from sqlalchemy import Column, ForeignKey, Integer, String, create_engine, orm
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
 
 
 ENGINE = create_engine(
