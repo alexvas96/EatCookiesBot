@@ -21,12 +21,23 @@ async def get_text_messages(msg: types.Message) -> None:
         await msg.answer('Привет!')
 
     elif 'обед' in msg_lower:
-        await msg.answer('Смотри, что я нашел:')
+        options = []
 
         with session_scope() as s:
             places = s.query(Place).all()
             for p in places:
-                await msg.answer(p.name)
+                options.append(p.name)
+
+        msg_with_poll = await bot.send_poll(
+            chat_id=msg.chat.id,
+            question='Откуда заказываем?',
+            options=options,
+            is_anonymous=False,
+            open_period=600,
+        )
+
+        print(msg_with_poll.poll.values)
+
     else:
         await msg.answer('Не понимаю, что это значит.')
 
