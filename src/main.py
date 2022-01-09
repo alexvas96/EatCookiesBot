@@ -3,24 +3,31 @@ from datetime import datetime
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
+from sqlalchemy.exc import NoResultFound
 
-from db import Place, session_scope
+from db import QUERY_WINDOW_SIZE, Place, Session, Subscription, session_scope
 from settings import API_TOKEN
 
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-chat_ids = set()
-
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(msg: types.Message) -> None:
-    chat_ids.add(msg.chat.id)
+    with session_scope() as session:
+        session: Session
+        try:
+            session.query(Subscription).filter(Subscription.chat_id == msg.chat.id).one()
+        except NoResultFound:
+            session.add(
+                Subscription(chat_id=msg.chat.id)
+            )
+
     await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}')
 
 
-async def create_lunch_poll(chat_id: str):
+async def create_lunch_poll(chat_id: int):
     options = []
 
     with session_scope() as session:
@@ -54,8 +61,25 @@ async def periodic(sleep_for: int, hour: int, minute: int) -> None:
         now = datetime.now()
 
         if now.hour == hour and now.minute == minute:
-            for id_ in chat_ids:
-                await create_lunch_poll(chat_id=id_)
+            with session_scope() as session:
+                session: Session
+                idx = 0
+                q = session.query(Subscription)
+
+                while True:
+                    start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
+                    instances = q.slice(start, stop).all()
+
+                    if instances is None:
+                        break
+
+                    for x in instances:
+                        await create_lunch_poll(chat_id=x.chat_id)
+
+                    if len(instances) < QUERY_WINDOW_SIZE:
+                        break
+
+                    idx += 1
 
 
 def main() -> None:

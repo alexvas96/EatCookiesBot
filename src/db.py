@@ -1,7 +1,9 @@
 from contextlib import contextmanager
+from typing import Generator
 
 from sqlalchemy import Column, ForeignKey, Integer, String, create_engine, orm
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm.session import Session
 
 from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
 
@@ -21,10 +23,13 @@ DBSession = orm.sessionmaker(
 )
 
 
+QUERY_WINDOW_SIZE = 100
+
+
 @contextmanager
-def session_scope():
+def session_scope() -> Generator[Session, None, None]:
     """Provides a transactional scope around a series of operations."""
-    session = DBSession()
+    session: Session = DBSession()
     try:
         yield session
         session.commit()
@@ -33,6 +38,12 @@ def session_scope():
         raise e
     finally:
         session.close()
+
+
+class Subscription(Base):
+    __tablename__ = 'subscriptions'
+
+    chat_id = Column(Integer, primary_key=True)
 
 
 class PlaceType(Base):
