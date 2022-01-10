@@ -40,7 +40,7 @@ async def create_lunch_poll(chat_id: int):
         question='Откуда заказываем?',
         options=options,
         is_anonymous=False,
-        open_period=600,
+        open_period=300,
     )
 
 
