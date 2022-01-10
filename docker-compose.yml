@@ -5,10 +5,11 @@ services:
     env_file:
       - .env
   db:
+    restart: always
     build: ./database/
     ports:
       - "5433:5432"
     volumes:
-      - postgresdata:/var/lib/postgresql/data
+      - ./postgres-data:/var/lib/postgresql/data
     env_file:
       - .env
