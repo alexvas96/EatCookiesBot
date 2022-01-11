@@ -3,9 +3,11 @@ from datetime import datetime
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.exc import NoResultFound
 
-from db import QUERY_WINDOW_SIZE, Place, Session, Subscription, session_scope
+from database import QUERY_WINDOW_SIZE, Session, session_scope
+from database.tables import Place, Subscription
 from settings import API_TOKEN
 
 
@@ -44,21 +46,31 @@ async def create_lunch_poll(chat_id: int):
     )
 
 
+@dp.poll_answer_handler()
+async def process_user_answer(ans: types.PollAnswer) -> None:
+    pass
+
+
 @dp.message_handler(content_types=ContentTypes.TEXT)
 async def get_text_messages(msg: types.Message) -> None:
     msg_lower = msg.text.lower()
 
     if msg_lower == 'привет':
         await msg.answer('Привет!')
+        return
 
-    elif 'обед' in msg_lower:
-        await create_lunch_poll(chat_id=msg.chat.id)
+    splitted_msg = msg_lower.split(' ')
+
+    for x in splitted_msg:
+        if x.startswith('обед'):
+            await create_lunch_poll(chat_id=msg.chat.id)
+            break
 
 
-async def periodic(sleep_for: int, hour: int, minute: int) -> None:
+async def periodic(sleep_for: int, hour: int, minute: int, tz: int) -> None:
     while True:
         await asyncio.sleep(sleep_for)
-        now = datetime.now()
+        now = datetime.utcnow() + relativedelta(hours=tz)
 
         if now.hour == hour and now.minute == minute:
             with session_scope() as session:
@@ -84,7 +96,7 @@ async def periodic(sleep_for: int, hour: int, minute: int) -> None:
 
 def main() -> None:
     loop = asyncio.get_event_loop()
-    loop.create_task(periodic(60, hour=10, minute=30))
+    loop.create_task(periodic(60, hour=10, minute=30, tz=3))
     executor.start_polling(dp, loop=loop)
 
 
