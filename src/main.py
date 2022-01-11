@@ -1,9 +1,11 @@
 import asyncio
 from datetime import datetime
+from typing import Callable
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
 from dateutil.relativedelta import relativedelta
+from loguru import logger
 from sqlalchemy.exc import NoResultFound
 
 from database import QUERY_WINDOW_SIZE, Session, session_scope
@@ -67,36 +69,48 @@ async def get_text_messages(msg: types.Message) -> None:
             break
 
 
-async def periodic(sleep_for: int, hour: int, minute: int, tz: int) -> None:
+async def send_lunch_poll(hour: int, minute: int, tz: int) -> None:
+    now = datetime.utcnow() + relativedelta(hours=tz)
+    logger.debug(now)
+
+    if now.hour == hour and now.minute == minute:
+        with session_scope() as session:
+            session: Session
+            idx = 0
+            q = session.query(Subscription)
+
+            while True:
+                start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
+                instances = q.slice(start, stop).all()
+
+                if instances is None:
+                    break
+
+                for x in instances:
+                    await create_lunch_poll(chat_id=x.chat_id)
+
+                if len(instances) < QUERY_WINDOW_SIZE:
+                    break
+
+                idx += 1
+
+
+async def do_periodic_task(timeout: int, stuff: Callable) -> None:
+    """
+
+    :param timeout: период (в секундах).
+    :param stuff: функция.
+    """
     while True:
-        await asyncio.sleep(sleep_for)
-        now = datetime.utcnow() + relativedelta(hours=tz)
-
-        if now.hour == hour and now.minute == minute:
-            with session_scope() as session:
-                session: Session
-                idx = 0
-                q = session.query(Subscription)
-
-                while True:
-                    start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
-                    instances = q.slice(start, stop).all()
-
-                    if instances is None:
-                        break
-
-                    for x in instances:
-                        await create_lunch_poll(chat_id=x.chat_id)
-
-                    if len(instances) < QUERY_WINDOW_SIZE:
-                        break
-
-                    idx += 1
+        await asyncio.sleep(timeout)
+        await stuff()
 
 
 def main() -> None:
     loop = asyncio.get_event_loop()
-    loop.create_task(periodic(60, hour=10, minute=30, tz=3))
+    loop.create_task(
+        do_periodic_task(60, lambda: send_lunch_poll(hour=10, minute=30, tz=3))
+    )
     executor.start_polling(dp, loop=loop)
 
 
