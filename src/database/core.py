@@ -2,9 +2,9 @@ from contextlib import contextmanager
 from typing import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm.session import Session, sessionmaker
 
-from database.tables import Base
 from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
 
 
@@ -15,9 +15,11 @@ ENGINE = create_engine(
     echo=True,
 )
 
+BaseTable = declarative_base()
+
 DBSession = sessionmaker(
     binds={
-        Base: ENGINE,
+        BaseTable: ENGINE,
     },
     expire_on_commit=False,
 )
