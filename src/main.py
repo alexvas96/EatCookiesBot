@@ -4,6 +4,7 @@ from typing import Callable
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
+from aiogram.utils.exceptions import BotBlocked
 from dateutil.relativedelta import relativedelta
 from loguru import logger
 from sqlalchemy.exc import NoResultFound
@@ -22,16 +23,19 @@ async def send_welcome(msg: types.Message) -> None:
     with session_scope() as session:
         session: Session
         try:
-            session.query(Subscription).filter(Subscription.chat_id == msg.chat.id).one()
+            session.query(Subscription).filter(
+                Subscription.chat_id == msg.chat.id,
+                Subscription.bot_id == bot.id,
+            ).one()
         except NoResultFound:
             session.add(
-                Subscription(chat_id=msg.chat.id)
+                Subscription(chat_id=msg.chat.id, bot_id=bot.id)
             )
 
     await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}')
 
 
-async def create_lunch_poll(chat_id: int):
+async def create_lunch_poll(chat_id: int) -> None:
     options = []
 
     with session_scope() as session:
@@ -71,13 +75,14 @@ async def get_text_messages(msg: types.Message) -> None:
 
 async def send_lunch_poll(hour: int, minute: int, tz: int) -> None:
     now = datetime.utcnow() + relativedelta(hours=tz)
-    logger.debug(now)
 
     if now.hour == hour and now.minute == minute:
+        logger.debug('now=%s' % now)
+
         with session_scope() as session:
             session: Session
             idx = 0
-            q = session.query(Subscription)
+            q = session.query(Subscription).filter(Subscription.bot_id == bot.id)
 
             while True:
                 start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
@@ -87,7 +92,10 @@ async def send_lunch_poll(hour: int, minute: int, tz: int) -> None:
                     break
 
                 for x in instances:
-                    await create_lunch_poll(chat_id=x.chat_id)
+                    try:
+                        await create_lunch_poll(chat_id=x.chat_id)
+                    except BotBlocked:
+                        logger.debug('bot id=%d is blocked for chat id=%d' % (bot.id, x.chat_id))
 
                 if len(instances) < QUERY_WINDOW_SIZE:
                     break
@@ -102,8 +110,8 @@ async def do_periodic_task(timeout: int, stuff: Callable) -> None:
     :param stuff: функция.
     """
     while True:
-        await asyncio.sleep(timeout)
         await stuff()
+        await asyncio.sleep(timeout)
 
 
 def main() -> None:

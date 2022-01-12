@@ -7,7 +7,9 @@ from database.core import BaseTable
 class Subscription(BaseTable):
     __tablename__ = 'subscriptions'
 
-    chat_id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chat_id = Column(Integer)
+    bot_id = Column(Integer)
 
 
 class PlaceType(BaseTable):
