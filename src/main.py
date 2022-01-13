@@ -10,7 +10,7 @@ from loguru import logger
 from sqlalchemy.exc import NoResultFound
 
 from database import QUERY_WINDOW_SIZE, Session, session_scope
-from database.tables import Place, Subscription
+from database.tables import Place, Poll, PollVote, Subscription
 from settings import API_TOKEN
 
 
@@ -35,26 +35,52 @@ async def send_welcome(msg: types.Message) -> None:
     await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}')
 
 
+def on_poll_create(poll: types.Poll, chat_id: int, session: Session) -> None:
+    """Действия после создания опроса."""
+    session.add(
+        Poll(id=poll.id, chat_id=chat_id)
+    )
+
+
 async def create_lunch_poll(chat_id: int) -> None:
     options = []
 
     with session_scope() as session:
         places = session.query(Place).all()
+
         for p in places:
             options.append(p.name)
 
-    await bot.send_poll(
-        chat_id=chat_id,
-        question='Откуда заказываем?',
-        options=options,
-        is_anonymous=False,
-        open_period=300,
-    )
+        msg = await bot.send_poll(
+            chat_id=chat_id,
+            question='Откуда заказываем?',
+            options=options,
+            is_anonymous=False,
+            open_period=180,
+        )
+
+        on_poll_create(poll=msg.poll, chat_id=chat_id, session=session)
 
 
 @dp.poll_answer_handler()
 async def process_user_answer(ans: types.PollAnswer) -> None:
-    pass
+    poll_id = ans.poll_id
+    user_id = ans.user.id
+
+    with session_scope() as session:
+        session: Session
+
+        if ans.option_ids:
+            objs = []
+
+            for option_id in ans.option_ids:
+                obj = PollVote(poll_id=poll_id, user_id=user_id, option_number=option_id)
+                objs.append(obj)
+
+            session.bulk_save_objects(objs)
+        else:
+            # отмена голоса
+            session.query(PollVote).filter(PollVote.poll_id == poll_id, PollVote.user_id == user_id).delete()
 
 
 @dp.message_handler(content_types=ContentTypes.TEXT)

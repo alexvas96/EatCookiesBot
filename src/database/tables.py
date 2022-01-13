@@ -27,3 +27,19 @@ class Place(BaseTable):
     url = Column(String)
     place_type_id = Column(Integer, ForeignKey('place_types.id'), nullable=False)
     place_type = relationship(PlaceType)
+
+
+class Poll(BaseTable):
+    __tablename__ = 'polls'
+
+    id = Column(String, primary_key=True)
+    chat_id = Column(Integer)
+
+
+class PollVote(BaseTable):
+    __tablename__ = 'polls_votes'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    poll_id = Column(String)
+    user_id = Column(Integer)
+    option_number = Column(Integer)
