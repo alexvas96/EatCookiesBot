@@ -24,8 +24,8 @@ async def send_welcome(msg: types.Message) -> None:
         session: Session
         try:
             session.query(Subscription).filter(
-                Subscription.chat_id == msg.chat.id,
                 Subscription.bot_id == bot.id,
+                Subscription.chat_id == msg.chat.id,
             ).one()
         except NoResultFound:
             session.add(
@@ -82,20 +82,22 @@ async def send_lunch_poll(hour: int, minute: int, tz: int) -> None:
         with session_scope() as session:
             session: Session
             idx = 0
-            q = session.query(Subscription).filter(Subscription.bot_id == bot.id)
+            query_subs = session.query(Subscription).filter(Subscription.bot_id == bot.id)
 
             while True:
                 start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
-                instances = q.slice(start, stop).all()
+                instances = query_subs.slice(start, stop).all()
 
                 if instances is None:
                     break
 
                 for x in instances:
+                    chat_id = x.chat_id
                     try:
-                        await create_lunch_poll(chat_id=x.chat_id)
+                        await create_lunch_poll(chat_id=chat_id)
                     except BotBlocked:
-                        logger.debug('bot id=%d is blocked for chat id=%d' % (bot.id, x.chat_id))
+                        logger.debug('bot id=%d is blocked for chat id=%d, removing' % (bot.id, chat_id))
+                        query_subs.filter(Subscription.chat_id == chat_id).delete()
 
                 if len(instances) < QUERY_WINDOW_SIZE:
                     break
