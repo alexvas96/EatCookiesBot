@@ -1,11 +1,11 @@
 import asyncio
-from datetime import datetime
+import datetime as dt
 from typing import Callable
 
+import pytz
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types.message import ContentTypes
 from aiogram.utils.exceptions import BotBlocked
-from dateutil.relativedelta import relativedelta
 from loguru import logger
 from sqlalchemy.exc import NoResultFound
 
@@ -35,10 +35,10 @@ async def send_welcome(msg: types.Message) -> None:
     await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}')
 
 
-def on_poll_create(poll: types.Poll, chat_id: int, session: Session) -> None:
+def on_poll_creating(poll: types.Poll, chat_id: int, session: Session) -> None:
     """Действия после создания опроса."""
     session.add(
-        Poll(id=poll.id, chat_id=chat_id)
+        Poll(id=poll.id, chat_id=chat_id, open_period=poll.open_period)
     )
 
 
@@ -56,10 +56,10 @@ async def create_lunch_poll(chat_id: int) -> None:
             question='Откуда заказываем?',
             options=options,
             is_anonymous=False,
-            open_period=180,
+            open_period=300,
         )
 
-        on_poll_create(poll=msg.poll, chat_id=chat_id, session=session)
+        on_poll_creating(poll=msg.poll, chat_id=chat_id, session=session)
 
 
 @dp.poll_answer_handler()
@@ -99,25 +99,25 @@ async def get_text_messages(msg: types.Message) -> None:
             break
 
 
-async def send_lunch_poll(hour: int, minute: int, tz: int) -> None:
-    now = datetime.utcnow() + relativedelta(hours=tz)
+async def send_lunch_poll() -> None:
+    now = dt.datetime.utcnow().replace(second=0, microsecond=0)
 
-    if now.hour == hour and now.minute == minute:
-        logger.debug('now=%s' % now)
+    with session_scope() as session:
+        session: Session
+        idx = 0
+        query_subs = session.query(Subscription).filter(Subscription.bot_id == bot.id)
 
-        with session_scope() as session:
-            session: Session
-            idx = 0
-            query_subs = session.query(Subscription).filter(Subscription.bot_id == bot.id)
+        while True:
+            start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
+            instances = query_subs.slice(start, stop).all()
 
-            while True:
-                start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
-                instances = query_subs.slice(start, stop).all()
+            if instances is None:
+                break
 
-                if instances is None:
-                    break
+            for x in instances:
+                tz = pytz.timezone(x.timezone)
 
-                for x in instances:
+                if x.mailing_time == tz.fromutc(now).time():
                     chat_id = x.chat_id
                     try:
                         await create_lunch_poll(chat_id=chat_id)
@@ -125,10 +125,10 @@ async def send_lunch_poll(hour: int, minute: int, tz: int) -> None:
                         logger.debug('bot id=%d is blocked for chat id=%d, removing' % (bot.id, chat_id))
                         query_subs.filter(Subscription.chat_id == chat_id).delete()
 
-                if len(instances) < QUERY_WINDOW_SIZE:
-                    break
+            if len(instances) < QUERY_WINDOW_SIZE:
+                break
 
-                idx += 1
+            idx += 1
 
 
 async def do_periodic_task(timeout: int, stuff: Callable) -> None:
@@ -145,7 +145,7 @@ async def do_periodic_task(timeout: int, stuff: Callable) -> None:
 def main() -> None:
     loop = asyncio.get_event_loop()
     loop.create_task(
-        do_periodic_task(60, lambda: send_lunch_poll(hour=10, minute=30, tz=3))
+        do_periodic_task(60, send_lunch_poll)
     )
     executor.start_polling(dp, loop=loop)
 
