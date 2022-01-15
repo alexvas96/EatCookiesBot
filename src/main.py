@@ -20,8 +20,8 @@ dp = Dispatcher(bot)
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(msg: types.Message) -> None:
+    """Начало работы с ботом."""
     with session_scope() as session:
-        session: Session
         try:
             session.query(Subscription).filter(
                 Subscription.bot_id == bot.id,
@@ -32,7 +32,21 @@ async def send_welcome(msg: types.Message) -> None:
                 Subscription(chat_id=msg.chat.id, bot_id=bot.id)
             )
 
-    await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}')
+    await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}.')
+
+
+@dp.message_handler(commands=['cancelmailing'])
+async def cancel_mailing(msg: types.Message) -> None:
+    """Отмена подписки на ежедневный опрос."""
+    with session_scope() as session:
+        subs = (session
+                .query(Subscription)
+                .filter(Subscription.bot_id == bot.id, Subscription.chat_id == msg.chat.id)
+                .one()
+                )
+        subs.mailing_time = None
+
+    await msg.answer('Подписка отменена.')
 
 
 def on_poll_creating(poll: types.Poll, chat_id: int, session: Session) -> None:
@@ -43,6 +57,7 @@ def on_poll_creating(poll: types.Poll, chat_id: int, session: Session) -> None:
 
 
 async def create_lunch_poll(chat_id: int) -> None:
+    """Создание и отправка опроса."""
     options = []
 
     with session_scope() as session:
@@ -64,12 +79,11 @@ async def create_lunch_poll(chat_id: int) -> None:
 
 @dp.poll_answer_handler()
 async def process_user_answer(ans: types.PollAnswer) -> None:
+    """Добавление/обновление ответа пользователя на опрос."""
     poll_id = ans.poll_id
     user_id = ans.user.id
 
     with session_scope() as session:
-        session: Session
-
         if ans.option_ids:
             objs = []
 
@@ -85,6 +99,7 @@ async def process_user_answer(ans: types.PollAnswer) -> None:
 
 @dp.message_handler(content_types=ContentTypes.TEXT)
 async def get_text_messages(msg: types.Message) -> None:
+    """Обработка пользовательских сообщений."""
     msg_lower = msg.text.lower()
 
     if msg_lower == 'привет':
@@ -100,10 +115,10 @@ async def get_text_messages(msg: types.Message) -> None:
 
 
 async def send_lunch_poll() -> None:
+    """Создание и отправка опроса по расписанию."""
     now = dt.datetime.utcnow().replace(second=0, microsecond=0)
 
     with session_scope() as session:
-        session: Session
         idx = 0
         query_subs = session.query(Subscription).filter(Subscription.bot_id == bot.id)
 
@@ -132,7 +147,7 @@ async def send_lunch_poll() -> None:
 
 
 async def do_periodic_task(timeout: int, stuff: Callable) -> None:
-    """
+    """Вызов переданной функции каждые `timeout` секунд.
 
     :param timeout: период (в секундах).
     :param stuff: функция.
