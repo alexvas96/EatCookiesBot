@@ -11,7 +11,6 @@ class Subscription(BaseTable):
     id = Column(Integer, primary_key=True, autoincrement=True)
     chat_id = Column(Integer)
     bot_id = Column(Integer)
-    timezone = Column(String(200))
     mailing_time = Column(Time)
 
 
