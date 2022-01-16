@@ -2,15 +2,16 @@ import asyncio
 import datetime as dt
 from typing import Callable
 
-import pytz
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types.message import ContentTypes
 from aiogram.utils.exceptions import BotBlocked
+from dateutil.relativedelta import relativedelta
 from loguru import logger
 from sqlalchemy.exc import NoResultFound
 
 from database import QUERY_WINDOW_SIZE, Session, session_scope
-from database.tables import Place, Poll, PollVote, Subscription
+from database.tables import ChatTimezone, Place, Poll, PollVote, Subscription
 from settings import API_TOKEN
 
 
@@ -33,6 +34,16 @@ async def send_welcome(msg: types.Message) -> None:
             )
 
     await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}.')
+
+
+class TuneTimezone(StatesGroup):
+    waiting_for_tz = State()
+
+
+@dp.message_handler(commands=['tz'])
+async def set_timezone(msg: types.Message) -> None:
+    await msg.reply('🌐 Текущий часовой пояс: UTC +HH:MM.')
+    # await TuneTimezone.waiting_for_tz.set()
 
 
 @dp.message_handler(commands=['cancelmailing'])
@@ -120,7 +131,11 @@ async def send_lunch_poll() -> None:
 
     with session_scope() as session:
         idx = 0
-        query_subs = session.query(Subscription).filter(Subscription.bot_id == bot.id)
+        query_subs = (session
+                      .query(Subscription.chat_id, Subscription.mailing_time, ChatTimezone.sign, ChatTimezone.offset)
+                      .filter(Subscription.bot_id == bot.id)
+                      .join(ChatTimezone, Subscription.chat_id == ChatTimezone.chat_id)
+                      )
 
         while True:
             start, stop = QUERY_WINDOW_SIZE * idx, QUERY_WINDOW_SIZE * (idx + 1)
@@ -129,11 +144,11 @@ async def send_lunch_poll() -> None:
             if instances is None:
                 break
 
-            for x in instances:
-                tz = pytz.timezone(x.timezone)
+            for (chat_id, mailing_time, sign, offset) in instances:
+                current_time = now + sign * relativedelta(hours=offset.hour, minutes=offset.minute)
+                current_time = current_time.time()
 
-                if x.mailing_time == tz.fromutc(now).time():
-                    chat_id = x.chat_id
+                if mailing_time == current_time:
                     try:
                         await create_lunch_poll(chat_id=chat_id)
                     except BotBlocked:

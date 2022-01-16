@@ -49,3 +49,11 @@ class PollVote(BaseTable):
     poll_id = Column(String)
     user_id = Column(Integer)
     option_number = Column(Integer)
+
+
+class ChatTimezone(BaseTable):
+    __tablename__ = 'chats_timezones'
+
+    chat_id = Column(Integer, primary_key=True)
+    sign = Column(Integer)
+    offset = Column(Time)
