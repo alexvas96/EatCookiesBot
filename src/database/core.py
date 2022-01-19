@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm.session import Session, sessionmaker
 
@@ -15,14 +15,26 @@ ENGINE = create_engine(
     echo=True,
 )
 
-BaseTable = declarative_base()
+Base = declarative_base()
 
 DBSession = sessionmaker(
     binds={
-        BaseTable: ENGINE,
+        Base: ENGINE,
     },
     expire_on_commit=False,
 )
+
+
+class BaseTable(Base):
+    __abstract__ = True
+
+    id = Column(Integer, nullable=False, unique=True, primary_key=True, autoincrement=True)
+
+
+class BaseTableWithStringID(Base):
+    __abstract__ = True
+
+    id = Column(String, nullable=False, unique=True, primary_key=True)
 
 
 @contextmanager
