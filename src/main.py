@@ -172,9 +172,8 @@ async def send_lunch_poll() -> None:
             idx += 1
 
 
-async def check_polls_results() -> None:
-    cols_to_analyze = (PollVote.poll_id, Poll.chat_id, Poll.start_date,
-                       Poll.open_period, PollVote.option_number)
+async def send_polls_results() -> None:
+    cols_to_analyze = (PollVote.poll_id, Poll.chat_id, Poll.start_date, Poll.open_period, PollVote.option_number)
 
     with session_scope() as session:
         session: Session
@@ -211,8 +210,7 @@ async def check_polls_results() -> None:
                                  .one()
                                  )
                 except NoResultFound:
-                    logger.debug(
-                        f'poll_id#{poll_id}: Не найдено данных о результате с наибольшим количеством голосов')
+                    logger.debug(f'poll_id#{poll_id}: Не найдено данных о результате с наибольшим количеством голосов')
                     continue
 
                 await bot.send_message(
@@ -246,7 +244,7 @@ def main() -> None:
     )
 
     loop.create_task(
-        do_periodic_task(30, check_polls_results)
+        do_periodic_task(30, send_polls_results)
     )
 
     executor.start_polling(dp, loop=loop)
