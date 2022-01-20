@@ -164,8 +164,7 @@ async def send_lunch_poll() -> None:
                     try:
                         await create_lunch_poll(chat_id=chat_id)
                     except BotBlocked:
-                        logger.debug('bot id=%d is blocked for chat id=%d, removing' %
-                                     (bot.id, chat_id))
+                        logger.debug('bot id=%d is blocked for chat id=%d, removing' % (bot.id, chat_id))
                         query_subs.filter(Subscription.chat_id == chat_id).delete()
 
             if len(instances) < QUERY_WINDOW_SIZE:
