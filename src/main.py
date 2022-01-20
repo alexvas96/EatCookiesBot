@@ -5,7 +5,7 @@ from typing import Callable, Optional
 import pandas as pd
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.types.message import ContentTypes
+from aiogram.types.message import ContentTypes, ParseMode
 from aiogram.utils.exceptions import BotBlocked
 from dateutil.relativedelta import relativedelta
 from loguru import logger
@@ -133,6 +133,7 @@ async def get_text_messages(msg: types.Message) -> None:
 
 
 def get_utc_now() -> dt.datetime:
+    """Получить текущую дату и время по часовому поясу UTC."""
     return dt.datetime.utcnow().replace(second=0, microsecond=0)
 
 
@@ -163,7 +164,8 @@ async def send_lunch_poll() -> None:
                     try:
                         await create_lunch_poll(chat_id=chat_id)
                     except BotBlocked:
-                        logger.debug('bot id=%d is blocked for chat id=%d, removing' % (bot.id, chat_id))
+                        logger.debug('bot id=%d is blocked for chat id=%d, removing' %
+                                     (bot.id, chat_id))
                         query_subs.filter(Subscription.chat_id == chat_id).delete()
 
             if len(instances) < QUERY_WINDOW_SIZE:
@@ -173,6 +175,7 @@ async def send_lunch_poll() -> None:
 
 
 async def send_polls_results() -> None:
+    """Отправка информации о результатах опроса."""
     cols_to_analyze = (PollVote.poll_id, Poll.chat_id, Poll.start_date, Poll.open_period, PollVote.option_number)
 
     with session_scope() as session:
@@ -193,31 +196,36 @@ async def send_polls_results() -> None:
         now = get_utc_now()
         polls_to_close = []
 
-        polls_without_answers = (session
-                                 .query(Poll, PollVote.option_number)
-                                 .outerjoin(PollVote, PollVote.poll_id == Poll.id)
-                                 .group_by(Poll.id, PollVote.option_number)
-                                 .filter(Poll.is_closed == False, PollVote.option_number == None)
-                                 )
-
         for poll_id, row in df.iterrows():
             if now >= row.start_date + relativedelta(seconds=row.open_period):
                 try:
-                    name, url = (session
-                                 .query(Place.name, Place.url)
-                                 .join(PollOption, Place.id == PollOption.option_id)
-                                 .filter(PollOption.poll_id == poll_id, PollOption.position == int(row.option_number))
-                                 .one()
-                                 )
+                    name, url, choice_message = (
+                        session
+                        .query(Place.name, Place.url, Place.choice_message)
+                        .join(PollOption, Place.id == PollOption.option_id)
+                        .filter(PollOption.poll_id == poll_id, PollOption.position == int(row.option_number))
+                        .one()
+                    )
                 except NoResultFound:
-                    logger.debug(f'poll_id#{poll_id}: Не найдено данных о результате с наибольшим количеством голосов')
+                    logger.debug(
+                        f'poll_id#{poll_id}: Не найдено данных о результате с наибольшим количеством голосов')
                     continue
 
-                await bot.send_message(
-                    chat_id=row.chat_id,
-                    text=f'Заказываем из «{name}»\n{url}',
-                    # parse_mode='markdown',
-                )
+                if choice_message:
+                    await bot.send_message(
+                        chat_id=row.chat_id,
+                        text=choice_message,
+                    )
+                else:
+                    url_keyboard = types.InlineKeyboardMarkup()
+                    url_keyboard.add(types.InlineKeyboardButton(text='Открыть ссылку', url=url))
+
+                    await bot.send_message(
+                        chat_id=row.chat_id,
+                        text=f'Заказываем из *«{name}»*',
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=url_keyboard,
+                    )
 
                 polls_to_close.append(poll_id)
 
