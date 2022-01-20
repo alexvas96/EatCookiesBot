@@ -215,8 +215,8 @@ async def send_polls_results() -> None:
 
                 await bot.send_message(
                     chat_id=row.chat_id,
-                    text=f'Заказываем из *«{name}»*\n{url}',
-                    parse_mode='markdown',
+                    text=f'Заказываем из «{name}»\n{url}',
+                    # parse_mode='markdown',
                 )
 
                 polls_to_close.append(poll_id)
