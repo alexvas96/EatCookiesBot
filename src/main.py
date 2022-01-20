@@ -1,7 +1,8 @@
 import asyncio
 import datetime as dt
-from typing import Callable
+from typing import Callable, Optional
 
+import pandas as pd
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types.message import ContentTypes
@@ -9,9 +10,10 @@ from aiogram.utils.exceptions import BotBlocked
 from dateutil.relativedelta import relativedelta
 from loguru import logger
 from sqlalchemy.exc import NoResultFound
+from sqlalchemy.sql import func
 
-from database import QUERY_WINDOW_SIZE, Session, session_scope
-from database.tables import ChatTimezone, Place, Poll, PollVote, Subscription
+from database import ENGINE, QUERY_WINDOW_SIZE, Session, session_scope
+from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
 from settings import API_TOKEN
 
 
@@ -60,32 +62,37 @@ async def cancel_mailing(msg: types.Message) -> None:
     await msg.answer('Подписка отменена.')
 
 
-def on_poll_creating(poll: types.Poll, chat_id: int, session: Session) -> None:
+def on_poll_creating(poll: types.Poll, chat_id: int, session: Session, options: Optional[pd.DataFrame] = None) -> None:
     """Действия после создания опроса."""
     session.add(
         Poll(id=poll.id, chat_id=chat_id, open_period=poll.open_period)
     )
+    session.commit()
+
+    if options is not None:
+        options = pd.DataFrame({
+            'poll_id': poll.id,
+            'position': options.index,
+            'option_id': options.id,
+        })
+
+        options.to_sql(PollOption.__tablename__, ENGINE, if_exists='append', index=False)
 
 
 async def create_lunch_poll(chat_id: int) -> None:
     """Создание и отправка опроса."""
-    options = []
-
     with session_scope() as session:
-        places = session.query(Place).all()
-
-        for p in places:
-            options.append(p.name)
+        options = pd.read_sql(session.query(Place.id, Place.name).statement, ENGINE)
 
         msg = await bot.send_poll(
             chat_id=chat_id,
             question='Откуда заказываем?',
-            options=options,
+            options=options.name.to_list(),
             is_anonymous=False,
             open_period=300,
         )
 
-        on_poll_creating(poll=msg.poll, chat_id=chat_id, session=session)
+        on_poll_creating(poll=msg.poll, chat_id=chat_id, session=session, options=options)
 
 
 @dp.poll_answer_handler()
@@ -125,9 +132,13 @@ async def get_text_messages(msg: types.Message) -> None:
             break
 
 
+def get_utc_now() -> dt.datetime:
+    return dt.datetime.utcnow().replace(second=0, microsecond=0)
+
+
 async def send_lunch_poll() -> None:
     """Создание и отправка опроса по расписанию."""
-    now = dt.datetime.utcnow().replace(second=0, microsecond=0)
+    now = get_utc_now()
 
     with session_scope() as session:
         idx = 0
@@ -161,6 +172,59 @@ async def send_lunch_poll() -> None:
             idx += 1
 
 
+async def send_polls_results() -> None:
+    cols_to_analyze = (PollVote.poll_id, Poll.chat_id, Poll.start_date, Poll.open_period, PollVote.option_number)
+
+    with session_scope() as session:
+        session: Session
+        polls_to_process_query = (session
+                                  .query(*cols_to_analyze, func.count(PollVote.option_number).label('num_votes'))
+                                  .join(Poll, Poll.id == PollVote.poll_id)
+                                  .filter(Poll.is_closed == False)
+                                  .group_by(*cols_to_analyze)
+                                  )
+
+        df = (pd.read_sql(polls_to_process_query.statement, ENGINE)
+              .sort_values(['poll_id', 'num_votes'], ascending=[True, False])
+              .groupby('poll_id')
+              .first()
+              )
+
+        now = get_utc_now()
+        polls_to_close = []
+
+        polls_without_answers = (session
+                                 .query(Poll, PollVote.option_number)
+                                 .outerjoin(PollVote, PollVote.poll_id == Poll.id)
+                                 .group_by(Poll.id, PollVote.option_number)
+                                 .filter(Poll.is_closed == False, PollVote.option_number == None)
+                                 )
+
+        for poll_id, row in df.iterrows():
+            if now >= row.start_date + relativedelta(seconds=row.open_period):
+                try:
+                    name, url = (session
+                                 .query(Place.name, Place.url)
+                                 .join(PollOption, Place.id == PollOption.option_id)
+                                 .filter(PollOption.poll_id == poll_id, PollOption.position == int(row.option_number))
+                                 .one()
+                                 )
+                except NoResultFound:
+                    logger.debug(f'poll_id#{poll_id}: Не найдено данных о результате с наибольшим количеством голосов')
+                    continue
+
+                await bot.send_message(
+                    chat_id=row.chat_id,
+                    text=f'Заказываем из *«{name}»*\n{url}',
+                    parse_mode='markdown',
+                )
+
+                polls_to_close.append(poll_id)
+
+        # Проставление флага закрытия для обработанных опросов
+        session.query(Poll).filter(Poll.id.in_(polls_to_close)).update({Poll.is_closed: True})
+
+
 async def do_periodic_task(timeout: int, stuff: Callable) -> None:
     """Вызов переданной функции каждые `timeout` секунд.
 
@@ -174,9 +238,15 @@ async def do_periodic_task(timeout: int, stuff: Callable) -> None:
 
 def main() -> None:
     loop = asyncio.get_event_loop()
+
     loop.create_task(
         do_periodic_task(60, send_lunch_poll)
     )
+
+    loop.create_task(
+        do_periodic_task(30, send_polls_results)
+    )
+
     executor.start_polling(dp, loop=loop)
 
 
