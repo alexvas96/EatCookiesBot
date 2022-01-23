@@ -62,7 +62,12 @@ async def cancel_mailing(msg: types.Message) -> None:
     await msg.answer('Подписка отменена.')
 
 
-def on_poll_creating(poll: types.Poll, chat_id: int, session: Session, options: Optional[pd.DataFrame] = None) -> None:
+def on_poll_creating(
+    poll: types.Poll,
+    chat_id: int,
+    session: Session,
+    options: Optional[pd.DataFrame] = None,
+) -> None:
     """Действия после создания опроса."""
     session.add(
         Poll(id=poll.id, chat_id=chat_id, open_period=poll.open_period)
@@ -190,7 +195,6 @@ async def send_polls_results() -> None:
     )
 
     with session_scope() as session:
-        session: Session
         polls_to_process_query = (session
                                   .query(*cols_to_analyze,
                                          func.count(PollVote.option_number).label('num_votes')
