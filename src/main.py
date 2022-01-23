@@ -112,7 +112,8 @@ async def process_user_answer(ans: types.PollAnswer) -> None:
             session.bulk_save_objects(objs)
         else:
             # отмена голоса
-            session.query(PollVote).filter(PollVote.poll_id == poll_id, PollVote.user_id == user_id).delete()
+            session.query(PollVote).filter(PollVote.poll_id == poll_id,
+                                           PollVote.user_id == user_id).delete()
 
 
 @dp.message_handler(content_types=ContentTypes.TEXT)
@@ -144,7 +145,11 @@ async def send_lunch_poll() -> None:
     with session_scope() as session:
         idx = 0
         query_subs = (session
-                      .query(Subscription.chat_id, Subscription.mailing_time, ChatTimezone.sign, ChatTimezone.offset)
+                      .query(Subscription.chat_id,
+                             Subscription.mailing_time,
+                             ChatTimezone.sign,
+                             ChatTimezone.offset,
+                             )
                       .filter(Subscription.bot_id == bot.id)
                       .join(ChatTimezone, Subscription.chat_id == ChatTimezone.chat_id)
                       )
@@ -164,7 +169,8 @@ async def send_lunch_poll() -> None:
                     try:
                         await create_lunch_poll(chat_id=chat_id)
                     except BotBlocked:
-                        logger.debug('bot id=%d is blocked for chat id=%d, removing' % (bot.id, chat_id))
+                        logger.debug('bot id=%d is blocked for chat id=%d, removing' %
+                                     (bot.id, chat_id))
                         query_subs.filter(Subscription.chat_id == chat_id).delete()
 
             if len(instances) < QUERY_WINDOW_SIZE:
@@ -175,12 +181,20 @@ async def send_lunch_poll() -> None:
 
 async def send_polls_results() -> None:
     """Отправка информации о результатах опроса."""
-    cols_to_analyze = (PollVote.poll_id, Poll.chat_id, Poll.start_date, Poll.open_period, PollVote.option_number)
+    cols_to_analyze = (
+        PollVote.poll_id,
+        Poll.chat_id,
+        Poll.start_date,
+        Poll.open_period,
+        PollVote.option_number,
+    )
 
     with session_scope() as session:
         session: Session
         polls_to_process_query = (session
-                                  .query(*cols_to_analyze, func.count(PollVote.option_number).label('num_votes'))
+                                  .query(*cols_to_analyze,
+                                         func.count(PollVote.option_number).label('num_votes')
+                                         )
                                   .join(Poll, Poll.id == PollVote.poll_id)
                                   .filter(Poll.is_closed == False)
                                   .group_by(*cols_to_analyze)
@@ -202,7 +216,9 @@ async def send_polls_results() -> None:
                         session
                         .query(Place.name, Place.url, Place.choice_message)
                         .join(PollOption, Place.id == PollOption.option_id)
-                        .filter(PollOption.poll_id == poll_id, PollOption.position == int(row.option_number))
+                        .filter(PollOption.poll_id == poll_id,
+                                PollOption.position == int(row.option_number)
+                                )
                         .one()
                     )
                 except NoResultFound:
