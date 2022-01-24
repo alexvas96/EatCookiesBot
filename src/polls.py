@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from bot import bot
 from database import ENGINE, QUERY_WINDOW_SIZE, session_scope
 from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
-from main import get_utc_now
+from utils import get_utc_now
 
 
 def on_poll_creating(

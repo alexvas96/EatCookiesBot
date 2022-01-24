@@ -63,11 +63,6 @@ async def get_text_messages(msg: types.Message) -> None:
             break
 
 
-def get_utc_now() -> dt.datetime:
-    """Получить текущую дату и время по часовому поясу UTC."""
-    return dt.datetime.utcnow().replace(second=0, microsecond=0)
-
-
 async def do_periodic_task(timeout: int, stuff: Callable) -> None:
     """Вызов переданной функции каждые `timeout` секунд.
 
