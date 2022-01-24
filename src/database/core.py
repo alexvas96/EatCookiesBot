@@ -12,7 +12,7 @@ QUERY_WINDOW_SIZE = 100
 
 ENGINE = create_engine(
     f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}',
-    echo=True,
+    # echo=True,
 )
 
 Base = declarative_base()
