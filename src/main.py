@@ -7,7 +7,7 @@ from aiogram.types.message import ContentTypes
 from sqlalchemy.exc import NoResultFound
 
 from bot import bot, dp
-from database import Session, session_scope
+from database import session_scope
 from database.tables import ChatTimezone, Subscription
 from polls import create_lunch_poll, process_user_answer, send_lunch_poll, send_polls_results
 from timezone import set_timezone
@@ -16,7 +16,6 @@ from timezone import set_timezone
 async def send_welcome(msg: types.Message) -> None:
     """Начало работы с ботом."""
     with session_scope() as session:
-        session: Session
         try:
             session.query(Subscription).filter(
                 Subscription.bot_id == bot.id,

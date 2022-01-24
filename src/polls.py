@@ -181,3 +181,13 @@ async def send_polls_results() -> None:
 
         # Проставление флага закрытия для обработанных опросов
         session.query(Poll).filter(Poll.id.in_(polls_to_close)).update({Poll.is_closed: True})
+
+
+def _clean_polls():
+    with session_scope() as session:
+        polls_to_delete = session.query(Poll.id).filter(Poll.is_closed == False).all()
+        polls_to_delete = [x[0] for x in polls_to_delete]
+
+        session.query(PollVote).filter(PollVote.poll_id.in_(polls_to_delete)).delete()
+        session.query(PollOption).filter(PollOption.poll_id.in_(polls_to_delete)).delete()
+        session.query(Poll).filter(Poll.id.in_(polls_to_delete)).delete()
