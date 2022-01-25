@@ -10,7 +10,7 @@ from bot import bot, dp
 from database import session_scope
 from database.tables import ChatTimezone, Subscription
 from polls import create_lunch_poll, process_user_answer, send_lunch_poll, send_polls_results
-from timezone import set_timezone
+from timezone import TuneTimezone, set_timezone, tz_chosen, tz_option_chosen
 
 
 async def send_welcome(msg: types.Message) -> None:
@@ -77,6 +77,8 @@ def register_handlers(dp: Dispatcher):
     dp.register_message_handler(send_welcome, commands=['start'])
     dp.register_message_handler(cancel_mailing, commands=['cancelmailing'])
     dp.register_message_handler(set_timezone, commands=['tz'])
+    dp.register_message_handler(tz_option_chosen, state=TuneTimezone.waiting_for_choice)
+    dp.register_message_handler(tz_chosen, state=TuneTimezone.waiting_for_tz)
     dp.register_message_handler(get_text_messages, content_types=ContentTypes.TEXT)
     dp.register_poll_answer_handler(process_user_answer)
 
