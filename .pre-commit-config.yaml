@@ -22,7 +22,7 @@ repos:
     name: autoflake
     description: Removes unused imports and unused variables as reported by pyflakes
     entry: autoflake
-    args: [--in-place, --remove-all-unused-imports]
+    args: [--in-place, --remove-all-unused-imports, --ignore-init-module-imports]
     language: python
     types: [python]
 
