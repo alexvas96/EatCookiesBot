@@ -84,8 +84,9 @@ class PollActions:
                     break
 
                 for (chat_id, mailing_time, sign, offset) in instances:
-                    current_time = now + sign * \
-                        relativedelta(hours=offset.hour, minutes=offset.minute)
+                    current_time = (
+                        now + sign * relativedelta(hours=offset.hour, minutes=offset.minute)
+                    )
                     current_time = current_time.time()
 
                     if mailing_time == current_time:
