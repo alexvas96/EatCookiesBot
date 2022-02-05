@@ -15,6 +15,9 @@ from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Sub
 from utils import get_utc_now
 
 
+DEFAULT_POLL_OPEN_PERIOD = 300
+
+
 def on_poll_creation(
     poll: types.Poll,
     chat_id: int,
@@ -38,8 +41,9 @@ def on_poll_creation(
 
 
 class PollActions:
-    def __init__(self, bot: Bot) -> None:
+    def __init__(self, bot: Bot, open_period: int = DEFAULT_POLL_OPEN_PERIOD) -> None:
         self.bot = bot
+        self.open_period = open_period
 
     async def create_lunch_poll(self, chat_id: int) -> None:
         """Создание и отправка опроса."""
@@ -51,7 +55,7 @@ class PollActions:
                 question='Откуда заказываем?',
                 options=options.name.to_list(),
                 is_anonymous=False,
-                open_period=300,
+                open_period=self.open_period,
             )
 
             on_poll_creation(poll=msg.poll, chat_id=chat_id, session=session, options=options)
@@ -120,8 +124,8 @@ class PollActions:
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
         cols_to_analyze = (
-            PollVote.poll_id,
             Poll.chat_id,
+            Poll.id.label('poll_id'),
             Poll.start_date,
             Poll.open_period,
             PollVote.option_number,
@@ -132,8 +136,8 @@ class PollActions:
                                       .query(*cols_to_analyze,
                                              func.count(PollVote.option_number).label('num_votes')
                                              )
-                                      .join(Poll, Poll.id == PollVote.poll_id)
                                       .filter(Poll.is_closed == False)
+                                      .outerjoin(PollVote, Poll.id == PollVote.poll_id)
                                       .group_by(*cols_to_analyze)
                                       )
 
@@ -154,13 +158,20 @@ class PollActions:
                             .query(Place.name, Place.url, Place.choice_message)
                             .join(PollOption, Place.id == PollOption.option_id)
                             .filter(PollOption.poll_id == poll_id,
-                                    PollOption.position == int(row.option_number)
+                                    PollOption.position == row.option_number,
                                     )
                             .one()
                         )
                     except NoResultFound:
                         logger.debug(
-                            f'poll_id#{poll_id}: Не найдено данных о результате с наибольшим количеством голосов')
+                            f'poll_id#{poll_id}: Не найдено данных о результате'
+                            ' с наибольшим количеством голосов'
+                        )
+                        await self.bot.send_message(
+                            chat_id=row.chat_id,
+                            text='Мало голосов для доставки 🙄',
+                        )
+                        polls_to_close.append(poll_id)
                         continue
 
                     if choice_message:
@@ -187,7 +198,7 @@ class PollActions:
 
 def _clean_polls():
     with session_scope() as session:
-        polls_to_delete = session.query(Poll.id).filter(Poll.is_closed == False).all()
+        polls_to_delete = session.query(Poll.id).filter(Poll.is_closed == True).all()
         polls_to_delete = [x[0] for x in polls_to_delete]
 
         session.query(PollVote).filter(PollVote.poll_id.in_(polls_to_delete)).delete()
