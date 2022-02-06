@@ -1,17 +1,22 @@
 import asyncio
 import datetime as dt
-from typing import Callable
+import re
+from typing import Callable, Optional
 
+import pandas as pd
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.types.message import ContentTypes
+from aiogram.types.message import ContentTypes, ParseMode
 from sqlalchemy.exc import NoResultFound
 
-from database import session_scope
-from database.tables import ChatTimezone, Subscription
+from database import ENGINE, session_scope
+from database.tables import ChatTimezone, Place, Subscription
 from polls import PollActions
 from settings import API_TOKEN
 from timezone import Timezone, TuneTimezone
+
+
+REGEX_NORMALIZATION = re.compile(r'\.|\s|-')
 
 
 class EatCookiesBot:
@@ -19,6 +24,21 @@ class EatCookiesBot:
         self.bot = Bot(token=API_TOKEN)
         self.dp = Dispatcher(self.bot, storage=MemoryStorage())
         self.poll_actions = PollActions(self.bot)
+
+        self.places: Optional[pd.DataFrame] = None
+        self.places_regex: Optional[re.Pattern] = None
+        self.update_places()
+
+    def update_places(self) -> None:
+        with session_scope() as session:
+            query = session.query(Place.name, Place.url).filter(Place.is_delivery == True)
+            df = pd.read_sql(query.statement, ENGINE)
+            df['normalized_name'] = (df.name
+                                     .str.lower()
+                                     .str.replace(pat=REGEX_NORMALIZATION, repl='', regex=True)
+                                     )
+            self.places = df.set_index('normalized_name').sort_index()
+            self.places_regex = re.compile('(' + '|'.join(self.places.index) + ')')
 
     async def start_subscription(self, msg: types.Message) -> None:
         """Начало работы с ботом."""
@@ -54,12 +74,29 @@ class EatCookiesBot:
 
         await msg.answer('Подписка отменена.')
 
-    async def handle_topic_message(self, msg: types.Message) -> None:
+    async def handle_thematic_message(self, msg: types.Message) -> None:
         """Обработка пользовательских сообщений."""
         msg_lower = msg.text.lower()
 
         if msg_lower == 'привет':
             await msg.answer('Привет!')
+            return
+
+        msg_normalized = REGEX_NORMALIZATION.sub('', msg_lower)
+        matching_place = self.places_regex.match(msg_normalized)
+
+        if matching_place:
+            place = self.places.loc[matching_place.group()]
+
+            url_keyboard = types.InlineKeyboardMarkup().row(
+                types.InlineKeyboardButton(text='Перейти на сайт', url=place.url)
+            )
+            await self.bot.send_message(
+                chat_id=msg.chat.id,
+                text=f'«{place["name"]}»',
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=url_keyboard,
+            )
             return
 
         splitted_msg = msg_lower.split(' ')
@@ -78,7 +115,10 @@ class EatCookiesBot:
             state=TuneTimezone.waiting_for_choice,
         )
         self.dp.register_message_handler(Timezone.tz_chosen, state=TuneTimezone.waiting_for_tz)
-        self.dp.register_message_handler(self.handle_topic_message, content_types=ContentTypes.TEXT)
+        self.dp.register_message_handler(
+            callback=self.handle_thematic_message,
+            content_types=ContentTypes.TEXT,
+        )
         self.dp.register_poll_answer_handler(self.poll_actions.process_user_answer)
 
     def execute(self):

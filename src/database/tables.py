@@ -26,6 +26,7 @@ class Place(BaseTable):
     url = Column(String)
     place_type_id = Column(Integer, ForeignKey('place_types.id'), nullable=False)
     choice_message = Column(String(500))
+    is_delivery = Column(Boolean, default=True)
 
     place_type = relationship(PlaceType)
 

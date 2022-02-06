@@ -181,8 +181,9 @@ class PollActions:
                             text=choice_message,
                         )
                     else:
-                        url_keyboard = types.InlineKeyboardMarkup()
-                        url_keyboard.add(types.InlineKeyboardButton(text='Открыть ссылку', url=url))
+                        url_keyboard = types.InlineKeyboardMarkup().row(
+                            types.InlineKeyboardButton(text='Перейти на сайт', url=url)
+                        )
 
                         await self.bot.send_message(
                             chat_id=row.chat_id,
