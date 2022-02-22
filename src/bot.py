@@ -99,12 +99,8 @@ class EatCookiesBot:
             )
             return
 
-        splitted_msg = msg_lower.split(' ')
-
-        for x in splitted_msg:
-            if x.startswith('обед'):
-                await self.poll_actions.create_lunch_poll(chat_id=msg.chat.id)
-                break
+        if msg_lower.startswith('!обед'):
+            await self.poll_actions.create_lunch_poll(chat_id=msg.chat.id)
 
     def register_handlers(self):
         self.dp.register_message_handler(self.start_subscription, commands=['start'])

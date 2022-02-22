@@ -9,6 +9,7 @@ from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
+from workalendar.europe import Russia
 
 from database import ENGINE, QUERY_WINDOW_SIZE, session_scope
 from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
@@ -44,6 +45,7 @@ class PollActions:
     def __init__(self, bot: Bot, open_period: int = DEFAULT_POLL_OPEN_PERIOD) -> None:
         self.bot = bot
         self.open_period = open_period
+        self.cal = Russia()
 
     async def create_lunch_poll(self, chat_id: int) -> None:
         """Создание и отправка опроса."""
@@ -87,9 +89,11 @@ class PollActions:
                     current_time = (
                         now + sign * relativedelta(hours=offset.hour, minutes=offset.minute)
                     )
-                    current_time = current_time.time()
 
-                    if mailing_time == current_time:
+                    if self.cal.is_holiday(current_time.date()):
+                        continue
+
+                    if mailing_time == current_time.time():
                         try:
                             await self.create_lunch_poll(chat_id=chat_id)
                         except BotBlocked:
