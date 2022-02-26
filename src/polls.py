@@ -90,7 +90,7 @@ class PollActions:
                         now + sign * relativedelta(hours=offset.hour, minutes=offset.minute)
                     )
 
-                    if self.cal.is_holiday(current_time.date()):
+                    if not self.cal.is_working_day(current_time.date()):
                         continue
 
                     if mailing_time == current_time.time():
