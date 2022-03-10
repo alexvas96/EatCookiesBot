@@ -50,7 +50,12 @@ class PollActions:
     async def create_lunch_poll(self, chat_id: int) -> None:
         """Создание и отправка опроса."""
         with session_scope() as session:
-            options = pd.read_sql(session.query(Place.id, Place.name).statement, ENGINE)
+            query = (session
+                     .query(Place.id, Place.name)
+                     .order_by(Place.place_type_id, Place.id)
+                     )
+
+            options = pd.read_sql(query.statement, ENGINE)
 
             msg = await self.bot.send_poll(
                 chat_id=chat_id,
