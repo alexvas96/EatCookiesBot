@@ -61,7 +61,7 @@ class EatCookiesBot:
                     ChatTimezone(chat_id=chat_id, sign=1, offset=dt.time(hour=3))
                 )
 
-        await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}.')
+        await msg.answer(f'Я бот. Приятно познакомиться, {msg.from_user.mention}.')
 
     async def cancel_mailing(self, msg: types.Message) -> None:
         """Отмена подписки на ежедневный опрос."""

@@ -6,14 +6,13 @@ from aiogram.types import ParseMode
 from aiogram.utils.exceptions import BotBlocked
 from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy import func
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from workalendar.europe import Russia
 
 from database import ENGINE, QUERY_WINDOW_SIZE, session_scope
 from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
-from utils import get_utc_now
+from utils import get_polls_votes, get_polls_winners, get_utc_now
 
 
 DEFAULT_POLL_OPEN_PERIOD = 300
@@ -133,34 +132,14 @@ class PollActions:
 
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
-        cols_to_analyze = (
-            Poll.chat_id,
-            Poll.id.label('poll_id'),
-            Poll.start_date,
-            Poll.open_period,
-            PollVote.option_number,
-        )
-
         with session_scope() as session:
-            polls_to_process_query = (session
-                                      .query(*cols_to_analyze,
-                                             func.count(PollVote.option_number).label('num_votes')
-                                             )
-                                      .filter(Poll.is_closed == False)
-                                      .outerjoin(PollVote, Poll.id == PollVote.poll_id)
-                                      .group_by(*cols_to_analyze)
-                                      )
-
-            df = (pd.read_sql(polls_to_process_query.statement, ENGINE)
-                  .sort_values(['poll_id', 'num_votes'], ascending=[True, False])
-                  .groupby('poll_id')
-                  .first()
-                  )
+            votes = get_polls_votes(session)
+            winners = get_polls_winners(votes)
 
             now = get_utc_now()
             polls_to_close = []
 
-            for poll_id, row in df.iterrows():
+            for poll_id, row in winners.iterrows():
                 if now >= row.start_date + relativedelta(seconds=row.open_period):
                     try:
                         name, url, choice_message = (
