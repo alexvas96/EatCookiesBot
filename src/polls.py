@@ -6,16 +6,17 @@ from aiogram.types import ParseMode
 from aiogram.utils.exceptions import BotBlocked
 from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from workalendar.europe import Russia
 
 from database import ENGINE, QUERY_WINDOW_SIZE, session_scope
 from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
+from translation import Translation
 from utils import get_polls_votes, get_polls_winners, get_utc_now
 
 
 DEFAULT_POLL_OPEN_PERIOD = 300
+MIN_VOTES_FOR_ORDER = 2
 
 
 def on_poll_creation(
@@ -41,10 +42,16 @@ def on_poll_creation(
 
 
 class PollActions:
-    def __init__(self, bot: Bot, open_period: int = DEFAULT_POLL_OPEN_PERIOD) -> None:
+    def __init__(
+        self,
+        bot: Bot,
+        open_period: int = DEFAULT_POLL_OPEN_PERIOD,
+        translation: Optional[Translation] = None,
+    ) -> None:
         self.bot = bot
         self.open_period = open_period
         self.cal = Russia()
+        self.translation = translation or Translation()
 
     async def create_lunch_poll(self, chat_id: int) -> None:
         """Создание и отправка опроса."""
@@ -140,47 +147,45 @@ class PollActions:
             polls_to_close = []
 
             for poll_id, row in winners.iterrows():
-                if now >= row.start_date + relativedelta(seconds=row.open_period):
-                    try:
-                        name, url, choice_message = (
-                            session
-                            .query(Place.name, Place.url, Place.choice_message)
-                            .join(PollOption, Place.id == PollOption.option_id)
-                            .filter(PollOption.poll_id == poll_id,
-                                    PollOption.position == row.option_number,
-                                    )
-                            .one()
-                        )
-                    except NoResultFound:
-                        logger.debug(
-                            f'poll_id#{poll_id}: Не найдено данных о результате'
-                            ' с наибольшим количеством голосов'
-                        )
-                        await self.bot.send_message(
-                            chat_id=row.chat_id,
-                            text='Мало голосов для доставки 🙄',
-                        )
-                        polls_to_close.append(poll_id)
-                        continue
+                if now < row.start_date + relativedelta(seconds=row.open_period):
+                    continue
 
-                    if choice_message:
-                        await self.bot.send_message(
-                            chat_id=row.chat_id,
-                            text=choice_message,
-                        )
-                    else:
-                        url_keyboard = types.InlineKeyboardMarkup().row(
-                            types.InlineKeyboardButton(text='Перейти на сайт', url=url)
-                        )
-
-                        await self.bot.send_message(
-                            chat_id=row.chat_id,
-                            text=f'Заказываем из *«{name}»*',
-                            parse_mode=ParseMode.MARKDOWN,
-                            reply_markup=url_keyboard,
-                        )
-
+                if row.num_votes < MIN_VOTES_FOR_ORDER:
+                    await self.bot.send_message(
+                        chat_id=row.chat_id,
+                        text=self.translation.not_enough_votes_to_delivery,
+                    )
                     polls_to_close.append(poll_id)
+                    continue
+
+                name, url, choice_message = (
+                    session
+                    .query(Place.name, Place.url, Place.choice_message)
+                    .join(PollOption, Place.id == PollOption.option_id)
+                    .filter(PollOption.poll_id == poll_id,
+                            PollOption.position == row.option_number,
+                            )
+                    .one()
+                )
+
+                if choice_message:
+                    await self.bot.send_message(
+                        chat_id=row.chat_id,
+                        text=choice_message,
+                    )
+                else:
+                    url_keyboard = types.InlineKeyboardMarkup().row(
+                        types.InlineKeyboardButton(text='Перейти на сайт', url=url)
+                    )
+
+                    await self.bot.send_message(
+                        chat_id=row.chat_id,
+                        text=f'Заказываем из *«{name}»*',
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=url_keyboard,
+                    )
+
+                polls_to_close.append(poll_id)
 
             # Проставление флага закрытия для обработанных опросов
             session.query(Poll).filter(Poll.id.in_(polls_to_close)).update({Poll.is_closed: True})

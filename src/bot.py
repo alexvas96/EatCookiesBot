@@ -15,6 +15,7 @@ from database.tables import ChatTimezone, Place, Subscription
 from polls import PollActions
 from settings import API_TOKEN
 from timezone import Timezone, TuneTimezone
+from translation import Translation
 
 
 REGEX_NORMALIZATION = re.compile(r'\.|\s|-')
@@ -24,7 +25,8 @@ class EatCookiesBot:
     def __init__(self):
         self.bot = Bot(token=API_TOKEN)
         self.dp = Dispatcher(self.bot, storage=MemoryStorage())
-        self.poll_actions = PollActions(self.bot)
+        self.translation = Translation()
+        self.poll_actions = PollActions(self.bot, translation=self.translation)
 
         self.places: Optional[pd.DataFrame] = None
         self.places_regex: Optional[re.Pattern] = None
