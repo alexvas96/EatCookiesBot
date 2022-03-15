@@ -1,11 +1,12 @@
-from typing import Optional
+from typing import Optional, Union
 
 import pandas as pd
 from aiogram import Bot, types
 from aiogram.types import ParseMode
-from aiogram.utils.exceptions import BotBlocked
+from aiogram.utils.exceptions import BotBlocked, ChatNotFound
 from dateutil.relativedelta import relativedelta
 from loguru import logger
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from workalendar.europe import Russia
 
@@ -137,6 +138,32 @@ class PollActions:
                 session.query(PollVote).filter(PollVote.poll_id == poll_id,
                                                PollVote.user_id == user_id).delete()
 
+    async def get_customer(
+        self,
+        session: Session,
+        chat_id: int,
+        poll_id: str,
+        option_number: int,
+    ) -> Union[types.User, None]:
+        """Определение пользователя для создания заказа.
+
+        :param session: экземпляр сессии.
+        :param chat_id: ID чата.
+        :param poll_id: ID опроса.
+        :param option_number: номер варианта ответа.
+        :return: случайный пользователь, проголосовавший за вариант с номером `option_number`.
+        """
+        query = session.query(PollVote.user_id)
+        query = query.filter(PollVote.poll_id == poll_id, PollVote.option_number == option_number)
+        user_id, = query.order_by(func.random()).first()
+
+        try:
+            chat_member = await self.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        except ChatNotFound:
+            return
+
+        return chat_member.user
+
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
         with session_scope() as session:
@@ -175,12 +202,24 @@ class PollActions:
                     )
                 else:
                     url_keyboard = types.InlineKeyboardMarkup().row(
-                        types.InlineKeyboardButton(text='Перейти на сайт', url=url)
+                        types.InlineKeyboardButton(text=self.translation.go_to_site, url=url)
                     )
+
+                    customer_text = ''
+
+                    user = await self.get_customer(
+                        session=session,
+                        chat_id=row.chat_id,
+                        poll_id=poll_id,
+                        option_number=row.option_number,
+                    )
+
+                    if user:
+                        customer_text = f'\nThe ball is in your court, {user.mention}!'
 
                     await self.bot.send_message(
                         chat_id=row.chat_id,
-                        text=f'Заказываем из *«{name}»*',
+                        text=f'Заказываем из *«{name}»*' + customer_text,
                         parse_mode=ParseMode.MARKDOWN,
                         reply_markup=url_keyboard,
                     )
