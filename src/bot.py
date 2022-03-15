@@ -15,16 +15,18 @@ from database.tables import ChatTimezone, Place, Subscription
 from polls import PollActions
 from settings import API_TOKEN
 from timezone import Timezone, TuneTimezone
+from translation import Translation
 
 
-REGEX_NORMALIZATION = re.compile(r'\.|\s|-')
+REGEX_NORMALIZATION = re.compile(r'[.\s-]')
 
 
 class EatCookiesBot:
     def __init__(self):
         self.bot = Bot(token=API_TOKEN)
         self.dp = Dispatcher(self.bot, storage=MemoryStorage())
-        self.poll_actions = PollActions(self.bot)
+        self.translation = Translation()
+        self.poll_actions = PollActions(self.bot, translation=self.translation)
 
         self.places: Optional[pd.DataFrame] = None
         self.places_regex: Optional[re.Pattern] = None
@@ -61,7 +63,7 @@ class EatCookiesBot:
                     ChatTimezone(chat_id=chat_id, sign=1, offset=dt.time(hour=3))
                 )
 
-        await msg.answer(f'Я бот. Приятно познакомиться, @{msg.from_user.username}.')
+        await msg.answer(f'Я бот. Приятно познакомиться, {msg.from_user.mention}.')
 
     async def cancel_mailing(self, msg: types.Message) -> None:
         """Отмена подписки на ежедневный опрос."""
@@ -73,11 +75,11 @@ class EatCookiesBot:
                     )
             subs.mailing_time = None
 
-        await msg.answer('Подписка отменена.')
+        await msg.answer(self.translation.subscription_cancelled)
 
     async def send_link(self, chat_id: int, place: pd.Series) -> None:
         url_keyboard = types.InlineKeyboardMarkup().row(
-            types.InlineKeyboardButton(text='Перейти на сайт', url=place.url)
+            types.InlineKeyboardButton(text=self.translation.go_to_site, url=place.url)
         )
         await self.bot.send_message(
             chat_id=chat_id,

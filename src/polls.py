@@ -1,22 +1,23 @@
-from typing import Optional
+from typing import Optional, Union
 
 import pandas as pd
 from aiogram import Bot, types
 from aiogram.types import ParseMode
-from aiogram.utils.exceptions import BotBlocked
+from aiogram.utils.exceptions import BotBlocked, ChatNotFound
 from dateutil.relativedelta import relativedelta
 from loguru import logger
 from sqlalchemy import func
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
 from workalendar.europe import Russia
 
 from database import ENGINE, QUERY_WINDOW_SIZE, session_scope
 from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
-from utils import get_utc_now
+from translation import Translation
+from utils import get_polls_votes, get_polls_winners, get_utc_now
 
 
 DEFAULT_POLL_OPEN_PERIOD = 300
+MIN_VOTES_FOR_ORDER = 2
 
 
 def on_poll_creation(
@@ -42,10 +43,16 @@ def on_poll_creation(
 
 
 class PollActions:
-    def __init__(self, bot: Bot, open_period: int = DEFAULT_POLL_OPEN_PERIOD) -> None:
+    def __init__(
+        self,
+        bot: Bot,
+        open_period: int = DEFAULT_POLL_OPEN_PERIOD,
+        translation: Optional[Translation] = None,
+    ) -> None:
         self.bot = bot
         self.open_period = open_period
         self.cal = Russia()
+        self.translation = translation or Translation()
 
     async def create_lunch_poll(self, chat_id: int) -> None:
         """Создание и отправка опроса."""
@@ -131,77 +138,93 @@ class PollActions:
                 session.query(PollVote).filter(PollVote.poll_id == poll_id,
                                                PollVote.user_id == user_id).delete()
 
+    async def get_customer(
+        self,
+        session: Session,
+        chat_id: int,
+        poll_id: str,
+        option_number: int,
+    ) -> Union[types.User, None]:
+        """Определение пользователя для создания заказа.
+
+        :param session: экземпляр сессии.
+        :param chat_id: ID чата.
+        :param poll_id: ID опроса.
+        :param option_number: номер варианта ответа.
+        :return: случайный пользователь, проголосовавший за вариант с номером `option_number`.
+        """
+        query = session.query(PollVote.user_id)
+        query = query.filter(PollVote.poll_id == poll_id, PollVote.option_number == option_number)
+        user_id, = query.order_by(func.random()).first()
+
+        try:
+            chat_member = await self.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        except ChatNotFound:
+            return
+
+        return chat_member.user
+
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
-        cols_to_analyze = (
-            Poll.chat_id,
-            Poll.id.label('poll_id'),
-            Poll.start_date,
-            Poll.open_period,
-            PollVote.option_number,
-        )
-
         with session_scope() as session:
-            polls_to_process_query = (session
-                                      .query(*cols_to_analyze,
-                                             func.count(PollVote.option_number).label('num_votes')
-                                             )
-                                      .filter(Poll.is_closed == False)
-                                      .outerjoin(PollVote, Poll.id == PollVote.poll_id)
-                                      .group_by(*cols_to_analyze)
-                                      )
-
-            df = (pd.read_sql(polls_to_process_query.statement, ENGINE)
-                  .sort_values(['poll_id', 'num_votes'], ascending=[True, False])
-                  .groupby('poll_id')
-                  .first()
-                  )
+            votes = get_polls_votes(session)
+            winners = get_polls_winners(votes)
 
             now = get_utc_now()
             polls_to_close = []
 
-            for poll_id, row in df.iterrows():
-                if now >= row.start_date + relativedelta(seconds=row.open_period):
-                    try:
-                        name, url, choice_message = (
-                            session
-                            .query(Place.name, Place.url, Place.choice_message)
-                            .join(PollOption, Place.id == PollOption.option_id)
-                            .filter(PollOption.poll_id == poll_id,
-                                    PollOption.position == row.option_number,
-                                    )
-                            .one()
-                        )
-                    except NoResultFound:
-                        logger.debug(
-                            f'poll_id#{poll_id}: Не найдено данных о результате'
-                            ' с наибольшим количеством голосов'
-                        )
-                        await self.bot.send_message(
-                            chat_id=row.chat_id,
-                            text='Мало голосов для доставки 🙄',
-                        )
-                        polls_to_close.append(poll_id)
-                        continue
+            for poll_id, row in winners.iterrows():
+                if now < row.start_date + relativedelta(seconds=row.open_period):
+                    continue
 
-                    if choice_message:
-                        await self.bot.send_message(
-                            chat_id=row.chat_id,
-                            text=choice_message,
-                        )
-                    else:
-                        url_keyboard = types.InlineKeyboardMarkup().row(
-                            types.InlineKeyboardButton(text='Перейти на сайт', url=url)
-                        )
-
-                        await self.bot.send_message(
-                            chat_id=row.chat_id,
-                            text=f'Заказываем из *«{name}»*',
-                            parse_mode=ParseMode.MARKDOWN,
-                            reply_markup=url_keyboard,
-                        )
-
+                if row.num_votes < MIN_VOTES_FOR_ORDER:
+                    await self.bot.send_message(
+                        chat_id=row.chat_id,
+                        text=self.translation.not_enough_votes_to_delivery,
+                    )
                     polls_to_close.append(poll_id)
+                    continue
+
+                name, url, choice_message = (
+                    session
+                    .query(Place.name, Place.url, Place.choice_message)
+                    .join(PollOption, Place.id == PollOption.option_id)
+                    .filter(PollOption.poll_id == poll_id,
+                            PollOption.position == row.option_number,
+                            )
+                    .one()
+                )
+
+                if choice_message:
+                    await self.bot.send_message(
+                        chat_id=row.chat_id,
+                        text=choice_message,
+                    )
+                else:
+                    url_keyboard = types.InlineKeyboardMarkup().row(
+                        types.InlineKeyboardButton(text=self.translation.go_to_site, url=url)
+                    )
+
+                    customer_text = ''
+
+                    user = await self.get_customer(
+                        session=session,
+                        chat_id=row.chat_id,
+                        poll_id=poll_id,
+                        option_number=row.option_number,
+                    )
+
+                    if user:
+                        customer_text = f'\nThe ball is in your court, {user.mention}!'
+
+                    await self.bot.send_message(
+                        chat_id=row.chat_id,
+                        text=f'Заказываем из *«{name}»*' + customer_text,
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=url_keyboard,
+                    )
+
+                polls_to_close.append(poll_id)
 
             # Проставление флага закрытия для обработанных опросов
             session.query(Poll).filter(Poll.id.in_(polls_to_close)).update({Poll.is_closed: True})
