@@ -13,7 +13,7 @@ from workalendar.europe import Russia
 from database import ENGINE, QUERY_WINDOW_SIZE, session_scope
 from database.tables import ChatTimezone, Place, Poll, PollOption, PollVote, Subscription
 from translation import Translation
-from utils import get_polls_votes, get_polls_winners, get_utc_now
+from utils import PlacesInfo, get_polls_votes, get_polls_winners, get_utc_now
 
 
 DEFAULT_POLL_OPEN_PERIOD = 300
@@ -47,11 +47,13 @@ class PollActions:
         self,
         bot: Bot,
         open_period: int = DEFAULT_POLL_OPEN_PERIOD,
+        places_info: Optional[PlacesInfo] = None,
         translation: Optional[Translation] = None,
     ) -> None:
         self.bot = bot
         self.open_period = open_period
         self.cal = Russia()
+        self.places_info = places_info or PlacesInfo()
         self.translation = translation or Translation()
 
     async def create_lunch_poll(self, chat_id: int) -> None:
@@ -143,18 +145,25 @@ class PollActions:
         session: Session,
         chat_id: int,
         poll_id: str,
-        option_number: int,
     ) -> Union[types.User, None]:
         """Определение пользователя для создания заказа.
 
         :param session: экземпляр сессии.
         :param chat_id: ID чата.
         :param poll_id: ID опроса.
-        :param option_number: номер варианта ответа.
-        :return: случайный пользователь, проголосовавший за вариант с номером `option_number`.
+        :return: случайный пользователь, проголосовавший за вариант с доставкой.
         """
         query = session.query(PollVote.user_id)
-        query = query.filter(PollVote.poll_id == poll_id, PollVote.option_number == option_number)
+        query = query.join(
+            PollOption,
+            (PollOption.poll_id == PollVote.poll_id) &
+            (PollOption.position == PollVote.option_number)
+        )
+        query = query.filter(
+            PollVote.poll_id == poll_id,
+            PollOption.option_id.not_in(self.places_info.not_delivery_ids),
+        )
+
         user_id, = query.order_by(func.random()).first()
 
         try:
@@ -211,7 +220,6 @@ class PollActions:
                         session=session,
                         chat_id=row.chat_id,
                         poll_id=poll_id,
-                        option_number=row.option_number,
                     )
 
                     if user:

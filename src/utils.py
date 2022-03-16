@@ -1,11 +1,43 @@
 import datetime as dt
+import re
+from typing import Optional
 
 import pandas as pd
+from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from database import ENGINE
-from database.tables import Poll, PollVote
+from database import ENGINE, session_scope
+from database.tables import Place, Poll, PollVote
+
+
+REGEX_NORMALIZATION = re.compile(r'[.\s-]')
+
+
+class PlacesInfo:
+    """Класс предназначен для хранения прочитанной из БД информации о местах для заказов."""
+
+    def __init__(self) -> None:
+        self.places: Optional[pd.DataFrame] = None
+        self.names_regex: Optional[re.Pattern] = None
+        self.not_delivery_ids = []
+        self.update_places()
+
+    def update_places(self) -> None:
+        with session_scope() as session:
+            query = session.query(Place.name, Place.url).filter(Place.is_delivery == True)
+            df = pd.read_sql(query.statement, ENGINE)
+            df['normalized_name'] = (df.name
+                                     .str.lower()
+                                     .str.replace(pat=REGEX_NORMALIZATION, repl='', regex=True)
+                                     )
+            self.places = df.set_index('normalized_name').sort_index()
+            self.names_regex = re.compile('(' + '|'.join(self.places.index) + ')')
+
+            query_not_delivery = session.query(Place.id).filter(Place.is_delivery == False)
+            self.not_delivery_ids = [r for r, in query_not_delivery.all()]
+
+        logger.debug(self.__class__.__name__ + ': updated')
 
 
 def get_utc_now() -> dt.datetime:
