@@ -23,8 +23,12 @@ class EatCookiesBot:
         self.bot = Bot(token=API_TOKEN)
         self.dp = Dispatcher(self.bot, storage=MemoryStorage())
         self.translation = Translation()
-        self.poll_actions = PollActions(self.bot, translation=self.translation)
         self.places_info = PlacesInfo()
+        self.poll_actions = PollActions(
+            bot=self.bot,
+            places_info=self.places_info,
+            translation=self.translation,
+        )
 
     async def start_subscription(self, msg: types.Message) -> None:
         """Начало работы с ботом."""
@@ -93,6 +97,11 @@ class EatCookiesBot:
         place = self.places_info.places.sample(1).iloc[0]
         await self.send_link(chat_id=msg.chat.id, place=place)
 
+    async def update_places(self, *_) -> None:
+        """Обновление информации о местах для заказа."""
+        await asyncio.sleep(0.1)
+        self.places_info.update_places()
+
     def register_handlers(self):
         self.dp.register_message_handler(self.start_subscription, commands=['start'])
         self.dp.register_message_handler(self.cancel_mailing, commands=['cancelmailing'])
@@ -114,11 +123,11 @@ class EatCookiesBot:
 
         self.dp.register_message_handler(self.get_random_place, commands=['random'])
         self.dp.register_message_handler(Timezone.tz_chosen, state=TuneTimezone.waiting_for_tz)
+        self.dp.register_message_handler(self.update_places, commands=['update'])
         self.dp.register_message_handler(
             callback=self.handle_thematic_message,
             content_types=ContentTypes.TEXT,
         )
-        self.dp.register_message_handler(self.places_info.update_places, commands=['update'])
         self.dp.register_poll_answer_handler(self.poll_actions.process_user_answer)
 
     async def set_commands(self, *_) -> None:

@@ -37,7 +37,7 @@ class PlacesInfo:
             query_not_delivery = session.query(Place.id).filter(Place.is_delivery == False)
             self.not_delivery_ids = [r for r, in query_not_delivery.all()]
 
-        logger.debug(self.__class__.__name__ + ': updated')
+        logger.info(self.__class__.__name__ + ': updated')
 
 
 def get_utc_now() -> dt.datetime:
