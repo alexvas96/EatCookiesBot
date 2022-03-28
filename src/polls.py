@@ -1,12 +1,12 @@
 from typing import Optional, Union
 
+import numpy as np
 import pandas as pd
 from aiogram import Bot, types
 from aiogram.types import ParseMode
 from aiogram.utils.exceptions import BotBlocked, ChatNotFound
 from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from workalendar.europe import Russia
 
@@ -145,6 +145,7 @@ class PollActions:
         session: Session,
         chat_id: int,
         poll_id: str,
+        last_customer_id: int,
     ) -> Union[types.User, None]:
         """Определение пользователя для создания заказа.
 
@@ -159,36 +160,45 @@ class PollActions:
             (PollOption.poll_id == PollVote.poll_id) &
             (PollOption.position == PollVote.option_number)
         )
+
         query = query.filter(
             PollVote.poll_id == poll_id,
             PollOption.option_id.not_in(self.places_info.not_delivery_ids),
         )
 
-        user_id, = query.order_by(func.random()).first()
+        user_ids = set(x for x, in query.all())
+
+        if last_customer_id in user_ids:
+            user_ids.remove(last_customer_id)
 
         try:
-            chat_member = await self.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+            chat_member = await self.bot.get_chat_member(
+                chat_id=chat_id,
+                user_id=np.random.choice(list(user_ids))
+            )
+            return chat_member.user
         except ChatNotFound:
-            return
-
-        return chat_member.user
+            pass
 
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
         with session_scope() as session:
-            votes = get_polls_votes(session)
+            votes = get_polls_votes(session, True)
             winners = get_polls_winners(votes)
+            chats_to_process = winners.chat_id.unique().tolist()
 
-            now = get_utc_now()
+            last_cms_query = session.query(Subscription.chat_id, Subscription.last_customer_id)
+            last_cms_query = last_cms_query.filter(Subscription.chat_id.in_(chats_to_process))
+            last_customers = dict(last_cms_query.all())
+
             polls_to_close = []
 
             for poll_id, row in winners.iterrows():
-                if now < row.start_date + relativedelta(seconds=row.open_period):
-                    continue
+                chat_id = row.chat_id
 
                 if row.num_votes < MIN_VOTES_FOR_ORDER:
                     await self.bot.send_message(
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         text=self.translation.not_enough_votes_to_delivery,
                     )
                     polls_to_close.append(poll_id)
@@ -206,7 +216,7 @@ class PollActions:
 
                 if choice_message:
                     await self.bot.send_message(
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         text=choice_message,
                     )
                 else:
@@ -218,15 +228,17 @@ class PollActions:
 
                     user = await self.get_customer(
                         session=session,
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         poll_id=poll_id,
+                        last_customer_id=last_customers[chat_id],
                     )
 
                     if user:
                         customer_text = f'\nThe ball is in your court, {user.mention}!'
+                        last_customers[chat_id] = user
 
                     await self.bot.send_message(
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         text=f'Заказываем из *«{name}»*' + customer_text,
                         parse_mode=ParseMode.MARKDOWN,
                         reply_markup=url_keyboard,

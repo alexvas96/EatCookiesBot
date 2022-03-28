@@ -5,7 +5,9 @@ from typing import Optional
 import pandas as pd
 from loguru import logger
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import INTERVAL
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.functions import concat
 
 from database import ENGINE, session_scope
 from database.tables import Place, Poll, PollVote
@@ -56,7 +58,7 @@ def get_sign(value: int) -> str:
     raise TypeError
 
 
-def get_polls_votes(session: Session) -> pd.DataFrame:
+def get_polls_votes(session: Session, closed=False) -> pd.DataFrame:
     """Возвращает таблицу с информацией о количестве голосов за варианты опросов."""
     cols_to_analyze = (
         Poll.chat_id,
@@ -66,10 +68,15 @@ def get_polls_votes(session: Session) -> pd.DataFrame:
         PollVote.option_number,
     )
 
+    time_condition = (
+        func.timezone('utc', func.now()) >= Poll.start_date +
+        func.cast(concat(Poll.open_period, ' SECONDS'), INTERVAL)
+    )
+
     polls_to_process_query = (
         session
         .query(*cols_to_analyze, func.count(PollVote.option_number).label('num_votes'))
-        .filter(Poll.is_closed == False)
+        .filter(Poll.is_closed == closed, time_condition)
         .outerjoin(PollVote, Poll.id == PollVote.poll_id)
         .group_by(*cols_to_analyze)
     )
