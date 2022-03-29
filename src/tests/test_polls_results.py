@@ -1,9 +1,8 @@
 import pandas as pd
 from hypothesis import given
 
-from database.core import session_scope
 from tests.mock.poll_votes import polls_votes
-from utils import get_polls_votes, get_polls_winners
+from utils import get_polls_winners
 
 
 @given(polls_votes())
@@ -14,9 +13,4 @@ def test_polls_results(df: pd.DataFrame) -> None:
 
 
 if __name__ == '__main__':
-    # test_polls_results()
-
-    with session_scope() as session:
-        df = get_polls_votes(session)
-        print(1)
-    print(1)
+    test_polls_results()
