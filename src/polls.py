@@ -172,14 +172,18 @@ class PollActions:
         if last_customer_id in user_ids:
             user_ids.remove(last_customer_id)
 
+        chosen_user = None
+
         try:
             chat_member = await self.bot.get_chat_member(
                 chat_id=chat_id,
                 user_id=np.random.choice(list(user_ids))
             )
-            return chat_member.user
+            chosen_user = chat_member.user
         except ChatNotFound:
             logger.info(f'Нет доступа к чату {chat_id}, пользователь не определен')
+
+        return chosen_user
 
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
