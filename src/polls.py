@@ -242,7 +242,7 @@ class PollActions:
 
                     if user:
                         customer_text = f'\n{user.mention}, я выбираю тебя!'
-                        last_customers[chat_id] = user
+                        last_customers[chat_id] = user.id
 
                     await self.bot.send_message(
                         chat_id=chat_id,
