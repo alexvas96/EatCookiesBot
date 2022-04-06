@@ -1,12 +1,12 @@
 from typing import Optional, Union
 
+import numpy as np
 import pandas as pd
 from aiogram import Bot, types
 from aiogram.types import ParseMode
 from aiogram.utils.exceptions import BotBlocked, ChatNotFound
 from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from workalendar.europe import Russia
 
@@ -111,8 +111,8 @@ class PollActions:
                         try:
                             await self.create_lunch_poll(chat_id=chat_id)
                         except BotBlocked:
-                            logger.debug('bot id=%d is blocked for chat id=%d, removing' %
-                                         (self.bot.id, chat_id))
+                            logger.info('bot id=%d is blocked for chat id=%d, removing' %
+                                        (self.bot.id, chat_id))
                             query_subs.filter(Subscription.chat_id == chat_id).delete()
 
                 if len(instances) < QUERY_WINDOW_SIZE:
@@ -145,50 +145,67 @@ class PollActions:
         session: Session,
         chat_id: int,
         poll_id: str,
+        last_customer_id: int,
     ) -> Union[types.User, None]:
         """Определение пользователя для создания заказа.
 
         :param session: экземпляр сессии.
         :param chat_id: ID чата.
         :param poll_id: ID опроса.
-        :return: случайный пользователь, проголосовавший за вариант с доставкой.
+        :param last_customer_id: ID пользователя, который был выбран в прошлый раз.
+        :return: случайный пользователь, проголосовавший за вариант с доставкой,
+        который не был выбран в предыдущий раз.
         """
-        query = session.query(PollVote.user_id)
-        query = query.join(
+        query = session.query(
+            PollVote.user_id,
+        ).join(
             PollOption,
             (PollOption.poll_id == PollVote.poll_id) &
             (PollOption.position == PollVote.option_number)
-        )
-        query = query.filter(
+        ).filter(
             PollVote.poll_id == poll_id,
             PollOption.option_id.not_in(self.places_info.not_delivery_ids),
         )
 
-        user_id, = query.order_by(func.random()).first()
+        user_ids = set(x for x, in query.all())
+
+        if last_customer_id in user_ids:
+            user_ids.remove(last_customer_id)
+
+        chosen_user = None
 
         try:
-            chat_member = await self.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+            chat_member = await self.bot.get_chat_member(
+                chat_id=chat_id,
+                user_id=np.random.choice(list(user_ids))
+            )
+            chosen_user = chat_member.user
         except ChatNotFound:
-            return
+            logger.info(f'Нет доступа к чату {chat_id}, пользователь не определен')
 
-        return chat_member.user
+        return chosen_user
 
     async def send_polls_results(self) -> None:
         """Отправка информации о результатах опроса."""
         with session_scope() as session:
             votes = get_polls_votes(session)
             winners = get_polls_winners(votes)
+            chats_to_process = winners.chat_id.unique().tolist()
 
-            now = get_utc_now()
+            query_customer = session.query(
+                Subscription.chat_id,
+                Subscription.last_customer_id,
+            ).filter(Subscription.chat_id.in_(chats_to_process))
+
+            last_customers = dict(query_customer.all())
             polls_to_close = []
 
             for poll_id, row in winners.iterrows():
-                if now < row.start_date + relativedelta(seconds=row.open_period):
-                    continue
+                chat_id = row.chat_id
 
                 if row.num_votes < MIN_VOTES_FOR_ORDER:
                     await self.bot.send_message(
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         text=self.translation.not_enough_votes_to_delivery,
                     )
                     polls_to_close.append(poll_id)
@@ -206,7 +223,7 @@ class PollActions:
 
                 if choice_message:
                     await self.bot.send_message(
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         text=choice_message,
                     )
                 else:
@@ -218,21 +235,31 @@ class PollActions:
 
                     user = await self.get_customer(
                         session=session,
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         poll_id=poll_id,
+                        last_customer_id=last_customers[chat_id],
                     )
 
                     if user:
-                        customer_text = f'\nThe ball is in your court, {user.mention}!'
+                        customer_text = f'\n{user.mention}, я выбираю тебя!'
+                        last_customers[chat_id] = user.id
 
                     await self.bot.send_message(
-                        chat_id=row.chat_id,
+                        chat_id=chat_id,
                         text=f'Заказываем из *«{name}»*' + customer_text,
                         parse_mode=ParseMode.MARKDOWN,
                         reply_markup=url_keyboard,
                     )
 
                 polls_to_close.append(poll_id)
+
+            subs = session.query(Subscription).filter(
+                Subscription.chat_id.in_(chats_to_process)
+            )
+
+            # TODO: переписать на bulk_update_mappings
+            for row in subs:
+                row.last_customer_id = last_customers[row.chat_id]
 
             # Проставление флага закрытия для обработанных опросов
             session.query(Poll).filter(Poll.id.in_(polls_to_close)).update({Poll.is_closed: True})

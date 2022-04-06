@@ -1,16 +1,21 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Time
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Time
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from database.core import Base, BaseTable, BaseTableWithStringID
 
 
+TChatId = BigInteger
+TUserId = BigInteger
+
+
 class Subscription(BaseTable):
     __tablename__ = 'subscriptions'
 
-    chat_id = Column(Integer)
-    bot_id = Column(Integer)
+    chat_id = Column(TChatId)
+    bot_id = Column(TUserId)
     mailing_time = Column(Time)
+    last_customer_id = Column(TUserId)
 
 
 class PlaceType(BaseTable):
@@ -34,7 +39,7 @@ class Place(BaseTable):
 class Poll(BaseTableWithStringID):
     __tablename__ = 'polls'
 
-    chat_id = Column(Integer)
+    chat_id = Column(TChatId)
     start_date = Column(DateTime, default=func.now())
     open_period = Column(Integer)
     is_closed = Column(Boolean, default=False)
@@ -52,13 +57,13 @@ class PollVote(BaseTable):
     __tablename__ = 'polls_votes'
 
     poll_id = Column(String)
-    user_id = Column(Integer)
+    user_id = Column(TUserId)
     option_number = Column(Integer)
 
 
 class ChatTimezone(Base):
     __tablename__ = 'chats_timezones'
 
-    chat_id = Column(Integer, nullable=False, unique=True, primary_key=True)
+    chat_id = Column(TChatId, nullable=False, unique=True, primary_key=True)
     sign = Column(Integer)
     offset = Column(Time)
