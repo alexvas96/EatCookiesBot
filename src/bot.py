@@ -135,8 +135,8 @@ class EatCookiesBot:
         commands = [
             BotCommand('/start', 'Начало работы с ботом'),
             BotCommand('/cancelmailing', 'Отмена ежедневной рассылки опроса'),
-            BotCommand('/lunch', 'Выбрать место для заказа (создать опрос)'),
-            BotCommand('/random', 'Выбрать случайное место для заказа'),
+            BotCommand('/lunch', 'Выбрать место для обеда (создать опрос)'),
+            BotCommand('/random', 'Выбрать случайное место для обеда'),
         ]
 
         await self.bot.set_my_commands(commands=commands)
