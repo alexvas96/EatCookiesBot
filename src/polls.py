@@ -68,7 +68,7 @@ class PollActions:
 
             msg = await self.bot.send_poll(
                 chat_id=chat_id,
-                question='Откуда заказываем?',
+                question='Откуда заказываем / куда идем?',
                 options=options.name.to_list(),
                 is_anonymous=False,
                 open_period=self.open_period,

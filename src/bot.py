@@ -5,6 +5,7 @@ from typing import Callable
 import pandas as pd
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher.filters.builtin import CommandStart
 from aiogram.types import BotCommand
 from aiogram.types.message import ContentTypes, ParseMode
 from sqlalchemy.exc import NoResultFound
@@ -103,7 +104,7 @@ class EatCookiesBot:
         self.places_info.update_places()
 
     def register_handlers(self):
-        self.dp.register_message_handler(self.start_subscription, commands=['start'])
+        self.dp.register_message_handler(self.start_subscription, CommandStart())
         self.dp.register_message_handler(self.cancel_mailing, commands=['cancelmailing'])
         self.dp.register_message_handler(Timezone.set_timezone, commands=['tz'])
         self.dp.register_message_handler(
@@ -134,8 +135,8 @@ class EatCookiesBot:
         commands = [
             BotCommand('/start', 'Начало работы с ботом'),
             BotCommand('/cancelmailing', 'Отмена ежедневной рассылки опроса'),
-            BotCommand('/lunch', 'Выбрать место для заказа (создать опрос)'),
-            BotCommand('/random', 'Выбрать случайное место для заказа'),
+            BotCommand('/lunch', 'Выбрать место для обеда (создать опрос)'),
+            BotCommand('/random', 'Выбрать случайное место для обеда'),
         ]
 
         await self.bot.set_my_commands(commands=commands)
