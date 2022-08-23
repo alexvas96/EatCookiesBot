@@ -4,6 +4,7 @@ RUN mkdir -p /usr/src/app/
 WORKDIR /usr/src/app
 
 COPY . /usr/src/app/
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install wheel --no-cache-dir
+RUN pip install -r requirements.txt --no-cache-dir
 
 CMD ["python", "src/main.py"]
