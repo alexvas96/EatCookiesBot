@@ -12,4 +12,5 @@ class Translation(BaseModel):
     go_to_site: str = 'Перейти на сайт'
 
     tz_current: str = 'Текущий часовой пояс'
+    tz_changed: str = 'Часовой пояс изменен'
     tz_enter: str = 'Введите часовой пояс в формате ±HH:MM.'

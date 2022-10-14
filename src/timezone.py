@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from aiogram import types
@@ -10,7 +11,7 @@ from translation import Translation
 from utils import get_sign
 
 
-TIME_REGEXP = re.compile(r'^(\+|-|)\s*[0-9]{1,2}(:[0-9]{2}|)$')
+TIME_REGEXP = re.compile(r"^(?P<sign>\+|-|)\s*(?P<h>\d{1,2})(?P<m>:[0-5]\d|)$")
 
 translation = Translation()
 
@@ -65,10 +66,25 @@ class Timezone:
 
     @staticmethod
     async def tz_chosen(msg: types.Message, state: FSMContext) -> None:
-        if not TIME_REGEXP.match(msg.text):
+        m = TIME_REGEXP.match(msg.text)
+
+        if not m:
             await msg.answer(translation.invalid_input_format)
             return
 
-        text_tz = msg.text.strip().replace(' ', '')
-        print(text_tz)
+        sign = 1 if m.group('sign') in ('', '+') else -1
+        h = int(m.group('h'))
+        m = int(m.group('m')[1:] or 0)
+
+        offset = datetime.time(hour=h, minute=m)
+
+        with session_scope() as session:
+            record = session.query(ChatTimezone).filter(ChatTimezone.chat_id == msg.chat.id).one()
+            record.sign, record.offset = sign, offset
+
+        await msg.answer(
+            f'{translation.tz_changed}: UTC {get_sign(sign)}{offset.strftime("%H:%M")}.',
+            reply_markup=types.ReplyKeyboardRemove(),
+        )
+
         await state.finish()
