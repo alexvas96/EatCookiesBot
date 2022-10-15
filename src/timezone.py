@@ -11,7 +11,8 @@ from translation import Translation
 from utils import get_sign
 
 
-TIME_REGEXP = re.compile(r"^(?P<sign>\+|-|)\s*(?P<h>\d{1,2})(?P<m>:[0-5]\d|)$")
+HOUR_REGEX = r'([0-1]?[0-9]|2[0-3])'
+TIME_REGEX = re.compile(r"^(?P<sign>\+|-|)\s*(?P<h>" + HOUR_REGEX + ")(?P<m>:[0-5]\d|)$")
 
 translation = Translation()
 
@@ -50,7 +51,12 @@ class Timezone:
         await TuneTimezone.waiting_for_choice.set()
 
     @staticmethod
-    async def option_chosen(msg: types.Message, state: FSMContext) -> None:
+    async def on_cancel(msg: types.Message, state: FSMContext) -> None:
+        await msg.answer(translation.action_canceled, reply_markup=types.ReplyKeyboardRemove())
+        await state.finish()
+
+    @classmethod
+    async def option_chosen(cls, msg: types.Message, state: FSMContext) -> None:
         msg_text = msg.text
 
         if msg_text == translation.change:
@@ -58,15 +64,18 @@ class Timezone:
             await TuneTimezone.next()
 
         elif msg_text == translation.cancel:
-            await msg.answer(translation.action_canceled, reply_markup=types.ReplyKeyboardRemove())
-            await state.finish()
+            await cls.on_cancel(msg, state)
 
         else:
             await msg.answer(translation.choose_from_keyboard)
 
-    @staticmethod
-    async def tz_chosen(msg: types.Message, state: FSMContext) -> None:
-        m = TIME_REGEXP.match(msg.text)
+    @classmethod
+    async def tz_chosen(cls, msg: types.Message, state: FSMContext) -> None:
+        if msg.text == translation.cancel:
+            await cls.on_cancel(msg, state)
+            return
+
+        m = TIME_REGEX.match(msg.text)
 
         if not m:
             await msg.answer(translation.invalid_input_format)
