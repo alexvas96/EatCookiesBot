@@ -56,7 +56,7 @@ class MailingTime:
         ).row(*buttons)
 
         await msg.answer(
-            f'🌐 {translation.current_mailing_params}: {mt_text}.',
+            f'⏰ {translation.current_mailing_params}: {mt_text}.',
             reply_markup=keyboard,
         )
 
