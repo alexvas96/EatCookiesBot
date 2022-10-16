@@ -12,9 +12,10 @@ from sqlalchemy.exc import NoResultFound
 
 from database import session_scope
 from database.tables import ChatTimezone, Subscription
+from mailing import MailingStates, MailingTime
 from polls import PollActions
 from settings import API_TOKEN
-from timezone import Timezone, TuneTimezone
+from timezone import Timezone, TimezoneStates
 from translation import Translation
 from utils import REGEX_NORMALIZATION, PlacesInfo
 
@@ -52,18 +53,6 @@ class EatCookiesBot:
                 )
 
         await msg.answer(f'Я бот. Приятно познакомиться, {msg.from_user.mention}.')
-
-    async def cancel_mailing(self, msg: types.Message) -> None:
-        """Отмена подписки на ежедневный опрос."""
-        with session_scope() as session:
-            subs = (session
-                    .query(Subscription)
-                    .filter(Subscription.bot_id == self.bot.id, Subscription.chat_id == msg.chat.id)
-                    .one()
-                    )
-            subs.mailing_time = None
-
-        await msg.answer(self.translation.subscription_cancelled)
 
     async def send_link(self, chat_id: int, place: pd.Series) -> None:
         url_keyboard = types.InlineKeyboardMarkup().row(
@@ -105,12 +94,19 @@ class EatCookiesBot:
 
     def register_handlers(self):
         self.dp.register_message_handler(self.start_subscription, CommandStart())
-        self.dp.register_message_handler(self.cancel_mailing, commands=['cancelmailing'])
+
         self.dp.register_message_handler(Timezone.set_timezone, commands=['tz'])
         self.dp.register_message_handler(
             callback=Timezone.option_chosen,
-            state=TuneTimezone.waiting_for_choice,
+            state=TimezoneStates.waiting_for_choice,
         )
+
+        self.dp.register_message_handler(MailingTime.change, commands=['mailing'])
+        self.dp.register_message_handler(
+            callback=MailingTime.option_chosen,
+            state=MailingStates.choice_action,
+        )
+        self.dp.register_message_handler(MailingTime.time_chosen, state=MailingStates.enter_time)
 
         self.dp.register_message_handler(
             self.handle_lunch_command,
@@ -123,7 +119,7 @@ class EatCookiesBot:
         )
 
         self.dp.register_message_handler(self.get_random_place, commands=['random'])
-        self.dp.register_message_handler(Timezone.tz_chosen, state=TuneTimezone.waiting_for_tz)
+        self.dp.register_message_handler(Timezone.tz_chosen, state=TimezoneStates.waiting_for_tz)
         self.dp.register_message_handler(self.update_places, commands=['update'])
         self.dp.register_message_handler(
             callback=self.handle_thematic_message,
@@ -134,9 +130,9 @@ class EatCookiesBot:
     async def set_commands(self, *_) -> None:
         commands = [
             BotCommand('/start', 'Начало работы с ботом'),
-            BotCommand('/cancelmailing', 'Отмена ежедневной рассылки опроса'),
             BotCommand('/lunch', 'Выбрать место для обеда (создать опрос)'),
             BotCommand('/random', 'Выбрать случайное место для обеда'),
+            BotCommand('/mailing', 'Управление рассылкой'),
         ]
 
         await self.bot.set_my_commands(commands=commands)

@@ -7,17 +7,16 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from database import session_scope
 from database.tables import ChatTimezone
-from translation import Translation
+from mailing import TIME_PATTERN
+from translation import default_translation as translation
 from utils import get_sign
 
 
-HOUR_REGEX = r'([0-1]?[0-9]|2[0-3])'
-TIME_REGEX = re.compile(r"^(?P<sign>\+|-|)\s*(?P<h>" + HOUR_REGEX + ")(?P<m>:[0-5]\d|)$")
-
-translation = Translation()
+SIGN_PATTERN = r'(?P<sign>\+|-|)'
+TZ_REGEX = re.compile('^' + SIGN_PATTERN + TIME_PATTERN + '$')
 
 
-class TuneTimezone(StatesGroup):
+class TimezoneStates(StatesGroup):
     waiting_for_choice = State()
     waiting_for_tz = State()
 
@@ -48,7 +47,7 @@ class Timezone:
             reply_markup=keyboard,
         )
 
-        await TuneTimezone.waiting_for_choice.set()
+        await TimezoneStates.waiting_for_choice.set()
 
     @staticmethod
     async def on_cancel(msg: types.Message, state: FSMContext) -> None:
@@ -61,7 +60,7 @@ class Timezone:
 
         if msg_text == translation.change:
             await msg.answer(translation.tz_enter)
-            await TuneTimezone.next()
+            await TimezoneStates.next()
 
         elif msg_text == translation.cancel:
             await cls.on_cancel(msg, state)
@@ -75,7 +74,7 @@ class Timezone:
             await cls.on_cancel(msg, state)
             return
 
-        m = TIME_REGEX.match(msg.text)
+        m = TZ_REGEX.match(msg.text)
 
         if not m:
             await msg.answer(translation.invalid_input_format)
