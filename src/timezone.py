@@ -41,17 +41,19 @@ class Timezone:
             types.KeyboardButton(text=translation.change),
             types.KeyboardButton(text=translation.cancel),
         )
-
+        print(123)
         await msg.answer(
             f'🌐 {translation.tz_current}: UTC {sign}{offset.strftime("%H:%M")}.',
             reply_markup=keyboard,
+            disable_notification=True,
+            reply=True,
         )
 
         await TimezoneStates.waiting_for_choice.set()
 
     @staticmethod
     async def on_cancel(msg: types.Message, state: FSMContext) -> None:
-        await msg.answer(translation.action_canceled, reply_markup=types.ReplyKeyboardRemove())
+        await msg.answer(translation.action_canceled, disable_notification=True, reply_markup=types.ReplyKeyboardRemove())
         await state.finish()
 
     @classmethod
@@ -59,14 +61,14 @@ class Timezone:
         msg_text = msg.text
 
         if msg_text == translation.change:
-            await msg.answer(translation.tz_enter)
+            await msg.answer(translation.tz_enter, disable_notification=True)
             await TimezoneStates.next()
 
         elif msg_text == translation.cancel:
             await cls.on_cancel(msg, state)
 
         else:
-            await msg.answer(translation.choose_from_keyboard)
+            await msg.answer(translation.choose_from_keyboard, disable_notification=True)
 
     @classmethod
     async def tz_chosen(cls, msg: types.Message, state: FSMContext) -> None:
@@ -77,7 +79,7 @@ class Timezone:
         m = TZ_REGEX.match(msg.text)
 
         if not m:
-            await msg.answer(translation.invalid_input_format)
+            await msg.answer(translation.invalid_input_format, disable_notification=True)
             return
 
         sign = 1 if m.group('sign') in ('', '+') else -1
@@ -92,6 +94,7 @@ class Timezone:
 
         await msg.answer(
             f'{translation.tz_changed}: UTC {get_sign(sign)}{offset.strftime("%H:%M")}.',
+            disable_notification=True,
             reply_markup=types.ReplyKeyboardRemove(),
         )
 
