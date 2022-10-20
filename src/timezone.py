@@ -10,7 +10,7 @@ from database.tables import ChatTimezone
 from mailing import TIME_PATTERN
 from translation import default_translation as translation
 from utils import get_sign
-
+from loguru import logger
 
 SIGN_PATTERN = r'(?P<sign>\+|-|)'
 TZ_REGEX = re.compile('^' + SIGN_PATTERN + TIME_PATTERN + '$')
@@ -41,7 +41,7 @@ class Timezone:
             types.KeyboardButton(text=translation.change),
             types.KeyboardButton(text=translation.cancel),
         )
-        print(123)
+        logger.info('123')
         await msg.answer(
             f'🌐 {translation.tz_current}: UTC {sign}{offset.strftime("%H:%M")}.',
             reply_markup=keyboard,
