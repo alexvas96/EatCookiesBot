@@ -1,19 +1,16 @@
 from contextlib import contextmanager
 from typing import Generator
 
-from sqlalchemy import Column, Integer, String, create_engine
+from sqlalchemy import Column, Identity, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm.session import Session, sessionmaker
 
-from settings import DB_HOST, DB_NAME, DB_PASSWORD, DB_USER
+from settings import POSTGRES_DSN
 
 
 QUERY_WINDOW_SIZE = 100
 
-ENGINE = create_engine(
-    f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}',
-    # echo=True,
-)
+ENGINE = create_engine(POSTGRES_DSN)
 
 Base = declarative_base()
 
@@ -28,7 +25,7 @@ DBSession = sessionmaker(
 class BaseTable(Base):
     __abstract__ = True
 
-    id = Column(Integer, nullable=False, unique=True, primary_key=True, autoincrement=True)
+    id = Column(Integer, Identity(always=True, start=1), primary_key=True)
 
 
 class BaseTableWithStringID(Base):

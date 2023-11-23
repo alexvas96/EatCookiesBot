@@ -6,7 +6,7 @@ repos:
   - id: nitpick
     name: Nitpick
     description: Enforce the same configuration (flake8, isort, mypy etc.) across multiple Python projects
-    entry: flake8 --select=NIP -j 0
+    entry: flake8 --select=NIP
     language: python
     types: [python]
     always_run: true
@@ -30,7 +30,6 @@ repos:
     name: isort
     description: isort your imports, so you don't have to
     entry: isort
-    args: [--recursive, --apply]
     language: python
     types: [python]
 
