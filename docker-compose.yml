@@ -1,9 +1,12 @@
 version: "3.8"
+
 services:
   app:
     build: ./
     depends_on:
       - db
+    networks:
+      - backend
     env_file:
       - .env
   db:
@@ -13,9 +16,14 @@ services:
       - "${PG_EXTERNAL_PORT}:${PG_PORT}"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend
     env_file:
       - .env
 
 volumes:
   postgres-data:
     driver: local
+
+networks:
+  backend:
