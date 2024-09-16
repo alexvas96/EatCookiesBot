@@ -73,6 +73,9 @@ class EatCookiesBot:
             await msg.answer('Привет!')
             return
 
+        if self.places_info.places is None:
+            return
+
         msg_normalized = REGEX_NORMALIZATION.sub('', msg_lower)
         matching_place = self.places_info.names_regex.match(msg_normalized)
 
@@ -89,7 +92,6 @@ class EatCookiesBot:
 
     async def update_places(self, *_) -> None:
         """Обновление информации о местах для заказа."""
-        await asyncio.sleep(0.1)
         self.places_info.update_places()
 
     def register_handlers(self):
