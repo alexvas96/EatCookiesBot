@@ -14,7 +14,8 @@ from database import session_scope
 from database.tables import ChatTimezone, Subscription
 from mailing import MailingStates, MailingTime
 from polls import PollActions
-from settings import API_TOKEN
+from settings import API_TOKEN, EMPLOYEE_SURNAMES
+from tickets import check_tickets, get_tickets_info
 from timezone import Timezone, TimezoneStates
 from translation import Translation
 from utils import REGEX_NORMALIZATION, PlacesInfo
@@ -94,6 +95,19 @@ class EatCookiesBot:
         """Обновление информации о местах для заказа."""
         self.places_info.update_places()
 
+    async def handle_tickets_command(self, msg: types.Message) -> None:
+        direction = await get_tickets_info(EMPLOYEE_SURNAMES)
+
+        if direction:
+            text = (f'{direction.fullName}\n'
+                    f'Найдено талонов: {direction.availableTicket}\n'
+                    f'Ближайшая дата записи: {direction.nearestDate}'
+                    )
+        else:
+            text = 'Талоны не найдены'
+
+        await self.bot.send_message(chat_id=msg.chat.id, text=text)
+
     def register_handlers(self):
         self.dp.register_message_handler(self.start_subscription, CommandStart())
 
@@ -121,6 +135,7 @@ class EatCookiesBot:
         )
 
         self.dp.register_message_handler(self.get_random_place, commands=['random'])
+        self.dp.register_message_handler(self.handle_tickets_command, commands=['tickets'])
         self.dp.register_message_handler(Timezone.tz_chosen, state=TimezoneStates.waiting_for_tz)
         self.dp.register_message_handler(self.update_places, commands=['update'])
         self.dp.register_message_handler(
@@ -135,9 +150,13 @@ class EatCookiesBot:
             BotCommand('/lunch', 'Выбрать место для обеда (создать опрос)'),
             BotCommand('/random', 'Выбрать случайное место для обеда'),
             BotCommand('/mailing', 'Управление рассылкой'),
+            BotCommand('/tickets', 'Проверить наличие талонов'),
         ]
 
         await self.bot.set_my_commands(commands=commands)
+
+    async def check_tickets(self) -> None:
+        await check_tickets(self.bot)
 
     def execute(self):
         self.register_handlers()
@@ -149,6 +168,10 @@ class EatCookiesBot:
 
         loop.create_task(
             do_periodic_task(30, self.poll_actions.send_polls_results)
+        )
+
+        loop.create_task(
+            do_periodic_task(30, self.check_tickets)
         )
 
         executor.start_polling(self.dp, loop=loop, on_startup=self.set_commands)
