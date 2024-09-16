@@ -2,7 +2,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from hypothesis import HealthCheck, settings, strategies as st
+from hypothesis import strategies as st
 
 
 MAX_OPTIONS = 10
@@ -76,7 +76,6 @@ def option_votes_pairs(draw):
 
 
 @st.composite
-@settings(suppress_health_check=(HealthCheck.too_slow,))  # TODO: убрать
 def polls_votes(draw):
     """Генерация моковой выгрузки о количестве голосов за различные варианты в опросах."""
     num_polls = draw(st.integers(min_value=0, max_value=MAX_POLLS))
@@ -94,9 +93,11 @@ def polls_votes(draw):
     if df.empty:
         return all_df
 
+    dfs = []
+
     for _, row in df.iterrows():
         votes = pd.DataFrame(draw(option_votes_pairs()), columns=['option_number', 'num_votes'])
-        votes[row.index] = row
-        all_df = pd.concat([all_df, votes], axis=0)
+        votes.loc[:, row.index] = row.values
+        dfs.append(votes)
 
-    return all_df
+    return pd.concat([all_df] + dfs, axis=0)

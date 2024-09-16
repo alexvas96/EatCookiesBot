@@ -30,6 +30,11 @@ class PlacesInfo:
         with session_scope() as session:
             query = session.query(Place.name, Place.url).filter(Place.is_delivery == True)
             df = pd.read_sql(query.statement, ENGINE)
+
+            if df.empty:
+                logger.info('Данные о местах не найдены')
+                return
+
             df['normalized_name'] = (df.name
                                      .str.lower()
                                      .str.replace(pat=REGEX_NORMALIZATION, repl='', regex=True)
