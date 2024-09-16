@@ -26,6 +26,10 @@ class PlacesInfo:
         self.not_delivery_ids = []
         self.update_places()
 
+    @property
+    def has_data(self) -> bool:
+        return self.places is not None
+
     def update_places(self) -> None:
         with session_scope() as session:
             query = session.query(Place.name, Place.url).filter(Place.is_delivery == True)
@@ -45,7 +49,7 @@ class PlacesInfo:
             query_not_delivery = session.query(Place.id).filter(Place.is_delivery == False)
             self.not_delivery_ids = [r for r, in query_not_delivery.all()]
 
-        logger.info(self.__class__.__name__ + ': updated')
+        logger.info('Информация о местах обновлена')
 
 
 def get_utc_now() -> dt.datetime:
