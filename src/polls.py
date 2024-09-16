@@ -66,6 +66,10 @@ class PollActions:
 
             options = pd.read_sql(query.statement, ENGINE)
 
+            if options.empty:
+                await self.bot.send_message(chat_id=chat_id, text='Нет данных для создания опроса')
+                return
+
             msg = await self.bot.send_poll(
                 chat_id=chat_id,
                 question='Откуда заказываем / куда идем?',

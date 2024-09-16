@@ -74,7 +74,7 @@ class EatCookiesBot:
             await msg.answer('Привет!')
             return
 
-        if self.places_info.places is None:
+        if not self.places_info.has_data:
             return
 
         msg_normalized = REGEX_NORMALIZATION.sub('', msg_lower)
@@ -88,8 +88,11 @@ class EatCookiesBot:
         await self.poll_actions.create_lunch_poll(chat_id=msg.chat.id)
 
     async def get_random_place(self, msg: types.Message) -> None:
-        place = self.places_info.places.sample(1).iloc[0]
-        await self.send_link(chat_id=msg.chat.id, place=place)
+        if self.places_info.has_data:
+            place = self.places_info.places.sample(1).iloc[0]
+            await self.send_link(chat_id=msg.chat.id, place=place)
+        else:
+            await msg.answer('Данные не найдены')
 
     async def update_places(self, *_) -> None:
         """Обновление информации о местах для заказа."""
@@ -180,8 +183,8 @@ class EatCookiesBot:
 async def do_periodic_task(timeout: int, stuff: Callable) -> None:
     """Вызов переданной функции каждые `timeout` секунд.
 
-    :param timeout: период (в секундах).
-    :param stuff: функция.
+    :param timeout: Период (в секундах).
+    :param stuff: Функция.
     """
     while True:
         await stuff()
